@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import platform
+import threading
 import time
 from typing import Any
 
@@ -26,6 +27,10 @@ class HealthMonitor:
         workflows = self.bus.get_state("workflows", [])
         voice = self.bus.get_state("voice", {})
         plugins = self.bus.get_state("plugins", [])
+        event_bus = self.bus.stats() if hasattr(self.bus, "stats") else {}
+        async_runtime = self.bus.get_state("async_runtime", {})
+        threads = self._thread_status()
+        alerts = self._alerts(vm.percent, modules, event_bus, async_runtime)
         data = {
             "timestamp": time.time(),
             "platform": platform.platform(),
@@ -41,8 +46,18 @@ class HealthMonitor:
             "workflows": workflows,
             "voice": voice,
             "plugins": plugins,
+            "threads": threads,
+            "event_bus": event_bus,
+            "async_runtime": async_runtime,
+            "workflow_queue": {
+                "running": self.bus.get_state("running_workflows", []),
+                "count": len(self.bus.get_state("running_workflows", [])),
+            },
+            "alerts": alerts,
         }
         self.bus.set_state("health", data, source="health_monitor")
+        if alerts:
+            self.bus.publish("health.alert", {"alerts": alerts}, source="health_monitor")
         return data
 
     def startup_verification(self) -> dict[str, Any]:
@@ -55,6 +70,25 @@ class HealthMonitor:
         result = {"ok": ok, "missing": missing, "failed": failed, "snapshot": snap}
         self.bus.publish("health.startup", result, source="health_monitor")
         return result
+
+    def report(self) -> dict[str, Any]:
+        snap = self.snapshot()
+        return {
+            "ok": not snap.get("failed_modules") and not snap.get("alerts"),
+            "timestamp": snap["timestamp"],
+            "summary": {
+                "cpu_percent": snap["cpu_percent"],
+                "memory_percent": snap["memory_percent"],
+                "gpu": snap["gpu"],
+                "active_modules": len(snap["modules"]),
+                "failed_modules": len(snap["failed_modules"]),
+                "agents": len(snap["agents"]),
+                "workflows": len(snap["workflows"]),
+                "threads": snap["threads"]["count"],
+                "event_bus_errors": snap["event_bus"].get("subscriber_error_count", 0),
+            },
+            "alerts": snap.get("alerts", []),
+        }
 
     def _gpu_status(self) -> dict[str, Any]:
         status: dict[str, Any] = {"cuda": False, "utilization": 0, "memory_percent": 0}
@@ -79,6 +113,40 @@ class HealthMonitor:
         except Exception:
             pass
         return status
+
+    def _thread_status(self) -> dict[str, Any]:
+        threads = []
+        for thread in threading.enumerate():
+            threads.append({
+                "name": thread.name,
+                "ident": thread.ident,
+                "daemon": thread.daemon,
+                "alive": thread.is_alive(),
+            })
+        return {"count": len(threads), "threads": threads}
+
+    def _alerts(
+        self,
+        memory_percent: float,
+        modules: dict[str, Any],
+        event_bus: dict[str, Any],
+        async_runtime: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        alerts: list[dict[str, Any]] = []
+        failed = [m for m in modules.values() if m.get("status") in {"failed", "error"}]
+        if failed:
+            alerts.append({"level": "error", "type": "module_failure", "count": len(failed)})
+        if memory_percent >= 90:
+            alerts.append({"level": "warning", "type": "memory_pressure", "value": memory_percent})
+        if event_bus.get("subscriber_error_count", 0):
+            alerts.append({
+                "level": "warning",
+                "type": "event_bus_errors",
+                "count": event_bus.get("subscriber_error_count", 0),
+            })
+        if async_runtime and not async_runtime.get("thread_alive", True):
+            alerts.append({"level": "error", "type": "async_runtime_stopped"})
+        return alerts
 
 
 __all__ = ["HealthMonitor"]

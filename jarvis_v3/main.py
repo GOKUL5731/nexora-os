@@ -254,6 +254,20 @@ async def run_gui(config: dict):
     sys.exit(exit_code)
 
 
+def run_debug_dashboard():
+    """Launch the plain runtime debug dashboard."""
+    from PySide6.QtWidgets import QApplication
+    from ui.debug_dashboard import DebugDashboard
+    import sys
+
+    app = QApplication.instance() or QApplication(sys.argv)
+    win = DebugDashboard()
+    win.setWindowTitle("JARVIS Runtime Debug Dashboard")
+    win.resize(1100, 720)
+    win.show()
+    sys.exit(app.exec())
+
+
 def main():
     setup_logging("jarvis")
     parser = argparse.ArgumentParser(description="JARVIS CORE OS")
@@ -261,6 +275,7 @@ def main():
     parser.add_argument("--gui",    action="store_true", help="Full GUI dashboard (all phases)")
     parser.add_argument("--setup",  action="store_true", help="First-time setup")
     parser.add_argument("--core-health", action="store_true", help="Print system health JSON")
+    parser.add_argument("--debug-dashboard", action="store_true", help="Runtime infrastructure debug dashboard")
     args = parser.parse_args()
 
     config = load_config()
@@ -279,6 +294,8 @@ def main():
         asyncio.run(voice_mode(config))
     elif args.gui:
         asyncio.run(run_gui(config))
+    elif args.debug_dashboard:
+        run_debug_dashboard()
     else:
         asyncio.run(chat_mode(config))
 

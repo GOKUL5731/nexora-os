@@ -25,40 +25,38 @@ for d in [LOG_DIR, DB_DIR, SS_DIR, CFG_DIR]:
 
 # ── Logging (call setup_logging() once at entry point) ─────────────────────
 def setup_logging(name: str = "jarvis") -> logging.Logger:
-    # Force UTF-8 on Windows to avoid cp1252 crashes
-    import sys, io
-    if sys.platform == "win32":
+    try:
+        from core.logger import setup_runtime_logging
+        return setup_runtime_logging(name)
+    except Exception:
+        # Force UTF-8 on Windows to avoid cp1252 crashes
+        import sys, io
+        if sys.platform == "win32":
+            try:
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+        fmt = logging.Formatter("%(asctime)s [%(name)-20s] %(levelname)s: %(message)s")
+        log_file = LOG_DIR / "jarvis.log"
+
+        handlers = [logging.StreamHandler(sys.stdout)]
         try:
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+            handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
         except Exception:
             pass
 
-    fmt = logging.Formatter("%(asctime)s [%(name)-20s] %(levelname)s: %(message)s")
-    log_file = LOG_DIR / "jarvis.log"
-
-    handlers = [logging.StreamHandler(sys.stdout)]
-    try:
-        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
-    except Exception:
-        pass
-
-    for h in handlers:
-        h.setFormatter(fmt)
-
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    if not root.handlers:
         for h in handlers:
-            root.addHandler(h)
+            h.setFormatter(fmt)
 
-    try:
-        from core.log_bus import install_event_log_handler
-        install_event_log_handler()
-    except Exception:
-        pass
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
+        if not root.handlers:
+            for h in handlers:
+                root.addHandler(h)
 
-    return logging.getLogger(name)
+        return logging.getLogger(name)
 
 
 # ── Config loading ──────────────────────────────────────────────────────────
