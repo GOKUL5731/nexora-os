@@ -1,0 +1,11 @@
+{
+  "id": "902f9bd046682984",
+  "target_type": "prompt",
+  "target_name": "test_prompt",
+  "base": "Answer helpfully.",
+  "variant": "Goal: produce a reliable result.\nContext:\nAnswer helpfully.\n\nValidate before finalizing.",
+  "score": 0.0,
+  "metrics": {},
+  "status": "created",
+  "created_at": "2026-05-11T19:16:38.866437"
+}

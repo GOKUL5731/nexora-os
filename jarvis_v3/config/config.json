@@ -1,0 +1,67 @@
+{
+  "llm": {
+    "provider": "ollama",
+    "model": "llama3.2",
+    "api_key": "",
+    "max_tokens": 2048,
+    "ollama_url": "http://localhost:11434",
+    "fallback_model": "mistral",
+    "coder_model": "deepseek-coder"
+  },
+  "voice": {
+    "tts_backend": "piper",
+    "stt_model": "base",
+    "language": "auto",
+    "wake_word": "jarvis",
+    "push_to_talk_key": "ctrl+space",
+    "stt_device": "cuda",
+    "stt_compute": "float16"
+  },
+  "memory": {
+    "db_path": "database/memory.db",
+    "chroma_path": "database/chroma"
+  },
+  "android": {
+    "device_id": null,
+    "adb_path": "adb"
+  },
+  "learning": {
+    "interval_minutes": 30,
+    "min_samples": 5
+  },
+  "always_ask_for": [
+    "delete_file",
+    "send_email",
+    "purchase",
+    "system_command"
+  ],
+  "permission_overrides": {},
+  "vision": {
+    "gpu": true
+  },
+  "sandbox": {
+    "root": "sandbox",
+    "keep_failed_sessions": true,
+    "default_timeout_seconds": 20
+  },
+  "reliability": {
+    "max_retries": 2,
+    "retry_backoff_ms": 250,
+    "minimum_plan_confidence": 0.5
+  },
+  "evolution": {
+    "enabled": true,
+    "experimental_mode": false,
+    "plugin_auto_deploy": false,
+    "protected_boot_files": [
+      "main.py",
+      "jarvis_gui.py",
+      "core/config.py",
+      "core/updater.py",
+      "core/upgrade_engine.py",
+      "core/safety.py",
+      "core/permission_engine.py",
+      "agents/agent_registry.py"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "75d1309b994441c8",
+  "target_type": "prompt",
+  "target_name": "test_prompt",
+  "base": "Answer helpfully.",
+  "variant": "Answer helpfully.\n\nCheck constraints, cite assumptions, and return executable next steps.",
+  "score": 0.0,
+  "metrics": {},
+  "status": "created",
+  "created_at": "2026-05-11T19:03:03.478730"
+}

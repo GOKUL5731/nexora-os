@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual Environment
+jarvis_py310_venv/
+venv/
+env/
+
+# Logs
+logs/
+*.log
+
+# AI Models
+models/
+checkpoints/
+
+# Cache
+.cache/
+temp/
+tmp/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

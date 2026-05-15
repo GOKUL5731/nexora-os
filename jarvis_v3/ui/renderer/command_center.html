@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>JARVIS Command Center</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --c:#ff4d4d;--c2:rgba(255,77,77,.1);--c3:rgba(255,77,77,.2);
+  --bdr:rgba(255,77,77,.18);--bg:rgba(14,5,7,.97);--panel:rgba(28,8,12,.9);
+  --txt:#ffe9e6;--dim:rgba(255,212,212,.42);
+  --red:#ff3a3a;--amb:#ffbf47;--grn:#ff7b5c;
+  --fn:'Segoe UI',system-ui,sans-serif;--mono:'Consolas','Courier New',monospace;
+}
+body{
+  width:100vw;height:100vh;background:var(--bg);
+  font-family:var(--fn);color:var(--txt);overflow:hidden;
+  display:grid;
+  grid-template-rows:58px 1fr 44px;
+  grid-template-columns:220px 1fr 260px;
+  grid-template-areas:"top top top" "side main right" "foot foot foot";
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;pointer-events:none;z-index:0;
+}
+/* TOPBAR */
+.top{
+  grid-area:top;
+  display:flex;align-items:center;
+  padding:0 22px;gap:22px;
+  border-bottom:1px solid var(--bdr);
+  background:rgba(0,6,16,.85);z-index:10;
+}
+.top-logo{font-size:26px;font-weight:700;letter-spacing:7px;color:var(--c);}
+.top-sub{font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:2px;margin-top:2px;}
+.top-mid{flex:1;display:flex;align-items:center;justify-content:center;gap:28px;}
+.metrics{display:flex;gap:22px;}
+.met{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.met-val{color:var(--c);font-size:15px;font-weight:700;font-family:var(--mono);}
+.met-lbl{color:var(--dim);font-size:8px;letter-spacing:1px;font-family:var(--mono);}
+/* radar */
+.radar{width:42px;height:42px;position:relative;display:flex;align-items:center;justify-content:center;}
+.r-ring{position:absolute;border-radius:50%;border:1px solid var(--bdr);}
+.r-ring:nth-child(1){width:42px;height:42px;}
+.r-ring:nth-child(2){width:28px;height:28px;}
+.r-ring:nth-child(3){width:14px;height:14px;}
+.r-sweep{position:absolute;width:21px;height:1px;background:linear-gradient(90deg,transparent,var(--c));transform-origin:0 50%;animation:spin 3s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.r-dot{width:5px;height:5px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c);}
+.top-right{display:flex;align-items:center;gap:10px;margin-left:auto;}
+.top-time{font-family:var(--mono);font-size:20px;color:var(--c);letter-spacing:2px;}
+.close-btn{
+  padding:6px 14px;border:1px solid var(--red);
+  background:transparent;color:var(--red);
+  font-family:var(--mono);font-size:10px;letter-spacing:2px;
+  cursor:pointer;border-radius:3px;transition:all .2s;
+}
+.close-btn:hover{background:rgba(255,58,58,.1);}
+/* SIDEBAR */
+.side{
+  grid-area:side;
+  display:flex;flex-direction:column;gap:4px;
+  padding:12px 8px;overflow-y:auto;
+  border-right:1px solid var(--bdr);scrollbar-width:none;
+}
+.nav{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;border:1px solid transparent;
+  border-radius:3px;cursor:pointer;
+  font-size:13px;font-weight:600;letter-spacing:.5px;
+  color:var(--dim);transition:all .2s;
+}
+.nav:hover,.nav.active{border-color:var(--bdr);background:var(--c2);color:var(--c);}
+.nav-icon{font-size:15px;width:22px;text-align:center;}
+.mem-stats{margin-top:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;}
+.mb-row{display:flex;flex-direction:column;gap:3px;}
+.mb-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--dim);}
+.mb-track{height:3px;background:rgba(0,212,255,.08);border-radius:2px;overflow:hidden;}
+.mb-fill{height:100%;background:var(--c);border-radius:2px;transition:width .5s;}
+/* MAIN */
+.main{
+  grid-area:main;display:flex;flex-direction:column;
+  padding:14px;gap:12px;overflow:hidden;
+}
+.chat{
+  flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;
+  padding:4px 6px;scrollbar-width:thin;scrollbar-color:var(--bdr) transparent;
+}
+.chat::-webkit-scrollbar{width:3px;}
+.chat::-webkit-scrollbar-thumb{background:var(--bdr);}
+.cm{display:flex;flex-direction:column;gap:4px;animation:cin .28s ease;}
+@keyframes cin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.cm-role{font-family:var(--mono);font-size:8.5px;letter-spacing:2px;}
+.cm.user .cm-role{color:var(--amb);text-align:right;}
+.cm.jarvis .cm-role{color:var(--c);}
+.cm-bub{padding:10px 14px;border-radius:3px;font-size:14px;line-height:1.6;font-weight:300;max-width:82%;}
+.cm.user .cm-bub{background:rgba(255,183,0,.07);border:1px solid rgba(255,183,0,.18);align-self:flex-end;color:rgba(255,225,140,.9);}
+.cm.jarvis .cm-bub{background:var(--c2);border:1px solid var(--bdr);}
+.cmd-row{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.cmd-pfx{font-family:var(--mono);font-size:18px;color:var(--c);flex-shrink:0;}
+.cmd-inp{
+  flex:1;background:transparent;border:none;
+  border-bottom:1.5px solid var(--c);
+  color:var(--txt);font-family:var(--mono);font-size:15px;
+  padding:8px 4px;outline:none;letter-spacing:.5px;
+}
+.cmd-inp::placeholder{color:var(--dim);}
+.cmd-btn{
+  padding:8px 16px;background:var(--c2);
+  border:1px solid var(--c);color:var(--c);
+  font-family:var(--mono);font-size:11px;letter-spacing:2px;
+  cursor:pointer;border-radius:3px;transition:all .2s;
+}
+.cmd-btn:hover{background:var(--c3);}
+/* RIGHT */
+.right{
+  grid-area:right;display:flex;flex-direction:column;gap:8px;
+  padding:12px 8px;overflow-y:auto;
+  border-left:1px solid var(--bdr);scrollbar-width:none;
+}
+.sec-hdr{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:2px;color:var(--c);
+  padding:6px 10px;border-bottom:1px solid var(--bdr);
+  display:flex;align-items:center;gap:6px;
+}
+.sec-hdr::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 6px var(--c);animation:blink 2.5s infinite;flex-shrink:0;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.agent-card{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;border:1px solid var(--bdr);
+  border-radius:3px;transition:all .3s;
+}
+.agent-card.run{border-color:var(--c);background:var(--c2);}
+.a-dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:all .3s;}
+.agent-card.run .a-dot{background:var(--c);box-shadow:0 0 6px var(--c);animation:blink 1s infinite;}
+.a-info{flex:1;}
+.a-name{font-size:11.5px;font-weight:600;letter-spacing:.5px;}
+.a-task{font-family:var(--mono);font-size:8.5px;color:var(--dim);margin-top:1px;}
+.tl{padding:6px 10px;display:flex;flex-direction:column;gap:5px;}
+.tl-item{display:flex;gap:7px;align-items:flex-start;font-size:10.5px;}
+.tl-dot{width:6px;height:6px;border-radius:50%;background:var(--bdr);margin-top:3px;flex-shrink:0;border:1px solid var(--c);}
+.tl-dot.done{background:var(--c);}
+.tl-txt{color:var(--dim);font-family:var(--mono);font-size:8.5px;line-height:1.5;}
+/* FOOTER */
+.foot{
+  grid-area:foot;display:flex;align-items:center;
+  padding:0 20px;gap:22px;
+  border-top:1px solid var(--bdr);
+  background:rgba(0,6,16,.85);
+  font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:1px;
+}
+.kbd{
+  background:var(--c2);border:1px solid var(--bdr);
+  border-radius:2px;padding:1px 5px;font-size:8px;color:var(--c);
+}
+.foot-status{margin-left:auto;color:var(--c);}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <div class="top-logo">JARVIS</div>
+    <div class="top-sub">COMMAND CENTER v3.0</div>
+  </div>
+  <div class="top-mid">
+    <div class="radar">
+      <div class="r-ring"></div><div class="r-ring"></div><div class="r-ring"></div>
+      <div class="r-sweep"></div><div class="r-dot"></div>
+    </div>
+    <div class="metrics">
+      <div class="met"><div class="met-val" id="m-cpu">--</div><div class="met-lbl">CPU %</div></div>
+      <div class="met"><div class="met-val" id="m-ram">--</div><div class="met-lbl">RAM %</div></div>
+      <div class="met"><div class="met-val" id="m-tasks">0</div><div class="met-lbl">TASKS</div></div>
+      <div class="met"><div class="met-val" id="m-mem">--</div><div class="met-lbl">MEMORIES</div></div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="top-time" id="cc-clock">--:--:--</div>
+    <button class="close-btn" onclick="window.jarvis?.toggleCommandCenter()">ESC / CLOSE</button>
+  </div>
+</div>
+
+<div class="side">
+  <div class="nav active" onclick="navClick(this,'chat')"><span class="nav-icon">💬</span>CHAT</div>
+  <div class="nav" onclick="navClick(this,'memory')"><span class="nav-icon">🧠</span>MEMORY</div>
+  <div class="nav" onclick="navClick(this,'agents')"><span class="nav-icon">⚙️</span>AGENTS</div>
+  <div class="nav" onclick="navClick(this,'android')"><span class="nav-icon">📱</span>ANDROID</div>
+  <div class="nav" onclick="navClick(this,'learning')"><span class="nav-icon">📈</span>LEARNING</div>
+
+  <div class="mem-stats">
+    <div class="mb-row">
+      <div class="mb-lbl"><span>SESSION</span><span id="p-st">0%</span></div>
+      <div class="mb-track"><div class="mb-fill" id="b-st" style="width:0%"></div></div>
+    </div>
+    <div class="mb-row">
+      <div class="mb-lbl"><span>LONG-TERM</span><span id="p-lt">0%</span></div>
+      <div class="mb-track"><div class="mb-fill" id="b-lt" style="width:0%"></div></div>
+    </div>
+    <div class="mb-row">
+      <div class="mb-lbl"><span>EPISODIC</span><span id="p-ep">0%</span></div>
+      <div class="mb-track"><div class="mb-fill" id="b-ep" style="width:0%"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="chat" id="cc-chat">
+    <div class="cm jarvis">
+      <div class="cm-role">JARVIS</div>
+      <div class="cm-bub">Command Center online. All systems operational, Sir.</div>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-pfx">›</span>
+    <input class="cmd-inp" id="cc-inp" placeholder="Enter command or question..." autocomplete="off">
+    <button class="cmd-btn" id="cc-send">EXECUTE</button>
+  </div>
+</div>
+
+<div class="right">
+  <div class="sec-hdr">ACTIVE AGENTS</div>
+  <div id="agent-cards">
+    <div class="agent-card" data-a="web">    <div class="a-dot"></div><div class="a-info"><div class="a-name">WEB AGENT</div>    <div class="a-task" id="at-web">Idle</div></div></div>
+    <div class="agent-card" data-a="code">   <div class="a-dot"></div><div class="a-info"><div class="a-name">CODE AGENT</div>   <div class="a-task" id="at-code">Idle</div></div></div>
+    <div class="agent-card" data-a="vision"> <div class="a-dot"></div><div class="a-info"><div class="a-name">VISION AGENT</div> <div class="a-task" id="at-vision">Idle</div></div></div>
+    <div class="agent-card" data-a="memory"> <div class="a-dot"></div><div class="a-info"><div class="a-name">MEMORY AGENT</div> <div class="a-task" id="at-memory">Idle</div></div></div>
+    <div class="agent-card" data-a="system"> <div class="a-dot"></div><div class="a-info"><div class="a-name">SYSTEM AGENT</div> <div class="a-task" id="at-system">Idle</div></div></div>
+    <div class="agent-card" data-a="android"><div class="a-dot"></div><div class="a-info"><div class="a-name">ANDROID AGENT</div><div class="a-task" id="at-android">Idle</div></div></div>
+  </div>
+  <div class="sec-hdr" style="margin-top:6px">TASK TIMELINE</div>
+  <div class="tl" id="timeline">
+    <div class="tl-item"><div class="tl-dot done"></div><div class="tl-txt">System initialized</div></div>
+  </div>
+</div>
+
+<div class="foot">
+  <span><span class="kbd">Ctrl+Space</span> Toggle</span>
+  <span><span class="kbd">Ctrl+Shift+J</span> Widget</span>
+  <span><span class="kbd">Esc</span> Close</span>
+  <div class="foot-status" id="foot-status">ALL SYSTEMS NOMINAL</div>
+</div>
+
+<script>
+let ws2, pendingId = null, retries = 0;
+
+function connect2() {
+  ws2 = new WebSocket('ws://127.0.0.1:7475');
+  ws2.onopen = () => { ws2.send(JSON.stringify({type:'get_status'})); };
+  ws2.onmessage = e => { try{ handle2(JSON.parse(e.data)); }catch{} };
+  ws2.onclose = () => { if(retries<10){retries++;setTimeout(connect2,2000);} };
+}
+function ws2send(o){ if(ws2&&ws2.readyState===WebSocket.OPEN) ws2.send(JSON.stringify(o)); }
+
+function handle2(msg) {
+  if(msg.type==='jarvis_response') {
+    const txt = msg.message||msg.error||'Done.';
+    addCCMsg('jarvis', txt);
+    if(msg.steps) flashCC(msg.steps);
+    if(msg.task_id && (msg.plan || txt.includes('CONFIRMATION'))) {
+      pendingId = msg.task_id;
+    } else { pendingId = null; }
+  }
+  if(msg.type==='status') {
+    if(msg.cpu!==undefined) document.getElementById('m-cpu').textContent=msg.cpu;
+    if(msg.ram!==undefined) document.getElementById('m-ram').textContent=msg.ram;
+    if(msg.tasks!==undefined) document.getElementById('m-tasks').textContent=msg.tasks;
+    if(msg.memories!==undefined) {
+      document.getElementById('m-mem').textContent=msg.memories;
+      setBar('b-ep','p-ep', Math.min(100,(msg.memories/500)*100));
+    }
+  }
+}
+
+document.getElementById('cc-send').onclick = ccSend;
+document.getElementById('cc-inp').addEventListener('keydown',e=>{if(e.key==='Enter')ccSend();});
+
+function ccSend() {
+  const inp=document.getElementById('cc-inp');
+  const txt=inp.value.trim();
+  if(!txt)return;
+  addCCMsg('user',txt);
+  addTL(txt);
+  inp.value='';
+  if(pendingId) {
+    const yes=/yes|y|ok|confirm|சரி/i.test(txt);
+    ws2send({type:'confirm',task_id:pendingId,confirmed:yes});
+    pendingId=null;
+  } else {
+    ws2send({type:'user_input',text:txt});
+  }
+}
+
+function addCCMsg(role,text) {
+  const d=document.createElement('div');
+  d.className=`cm ${role}`;
+  d.innerHTML=`<div class="cm-role">${role==='user'?'YOU':'JARVIS'}</div><div class="cm-bub">${text.replace(/\n/g,'<br>')}</div>`;
+  const chat=document.getElementById('cc-chat');
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function addTL(text) {
+  const tl=document.getElementById('timeline');
+  const d=document.createElement('div');
+  d.className='tl-item';
+  d.innerHTML=`<div class="tl-dot done"></div><div class="tl-txt">${text.slice(0,45)}</div>`;
+  tl.appendChild(d);
+  while(tl.children.length>12) tl.removeChild(tl.firstChild);
+}
+
+function flashCC(steps) {
+  steps.forEach(s=>{
+    const tool=(s.tool||s.step||'').toLowerCase();
+    ['web','code','vision','memory','system','android','browser'].forEach(a=>{
+      if(tool.includes(a)){
+        const card=document.querySelector(`[data-a="${a}"]`);
+        const task=document.getElementById(`at-${a}`);
+        if(card){card.classList.add('run');if(task)task.textContent=(s.step||'Running...').slice(0,28);}
+        setTimeout(()=>{if(card){card.classList.remove('run');if(task)task.textContent='Idle';}},3000);
+      }
+    });
+  });
+}
+
+function setBar(barId,pctId,pct) {
+  const p=Math.round(pct);
+  document.getElementById(barId).style.width=p+'%';
+  document.getElementById(pctId).textContent=p+'%';
+}
+
+function navClick(el,name) {
+  document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('foot-status').textContent='VIEW: '+name.toUpperCase();
+}
+
+setInterval(()=>{ document.getElementById('cc-clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false}); },1000);
+setInterval(()=>{ ws2send({type:'get_status'}); },8000);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') window.jarvis?.toggleCommandCenter(); });
+
+connect2();
+</script>
+</body>
+</html>

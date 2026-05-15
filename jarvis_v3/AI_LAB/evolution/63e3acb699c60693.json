@@ -1,0 +1,11 @@
+{
+  "id": "63e3acb699c60693",
+  "target_type": "prompt",
+  "target_name": "test_prompt",
+  "base": "Answer helpfully.",
+  "variant": "Answer with precise, tested, context-aware steps.",
+  "score": 0.0,
+  "metrics": {},
+  "status": "created",
+  "created_at": "2026-05-11T19:03:03.488546"
+}
