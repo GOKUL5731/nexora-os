@@ -4,7 +4,7 @@ __pycache__/
 *.pyo
 
 # Virtual Environment
-jarvis_py310_venv/
+nexora_py310_venv/
 venv/
 env/
 
@@ -20,6 +20,20 @@ checkpoints/
 .cache/
 temp/
 tmp/
+.pytest_cache/
+node_modules/
+nexora_os/frontend/node_modules/
+nexora_os/ai_lab_sandbox/
+nexora_os/frontend/dist/
+
+# Runtime databases (local state)
+*.db
+databases/
+nexora_os/databases/*.db
+
+# Screenshots / media captures
+nexora_os/screenshots/
+screenshots/
 
 # VS Code
 .vscode/
