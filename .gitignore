@@ -4,6 +4,10 @@ __pycache__/
 *.pyo
 
 # Virtual Environment
+.venv/
+.env
+.env.*
+!.env.example
 nexora_py310_venv/
 venv/
 env/
