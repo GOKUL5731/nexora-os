@@ -68,12 +68,13 @@ if errorlevel 1 (
 )
 
 echo [2/8] Checking Python backend dependencies...
-"%VENV_PY%" -c "import fastapi, uvicorn, pydantic, psutil, PIL, cv2, speech_recognition, pyttsx3, pytesseract, pyautogui, mss" >nul 2>nul
+"%VENV_PY%" -c "import fastapi, uvicorn, pydantic, psutil, PIL, cv2, speech_recognition, pyaudio, pyttsx3, pytesseract, pyautogui, mss" >nul 2>nul
 if errorlevel 1 (
   echo [INFO] Installing or repairing backend dependencies...
   "%VENV_PY%" -m pip install -r "%APP_DIR%\requirements.txt"
   if errorlevel 1 (
     echo [ERROR] Backend dependency installation failed.
+    echo [HINT] Voice microphone support requires PyAudio. On Windows, install Microsoft C++ Build Tools if pip cannot find a PyAudio wheel for your Python version.
     pause
     exit /b 1
   )
