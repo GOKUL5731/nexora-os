@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from typing import Any
 
 from ..agents.runtime import AgentRuntime
@@ -18,8 +19,14 @@ class SystemMonitor:
         self.agents = agents
         self.workflows = workflows
         self.memory = memory
+        self._snapshot_ttl = float(os.environ.get("NEXORA_MONITOR_SNAPSHOT_TTL", "1.0"))
+        self._snapshot_cache: dict[str, Any] | None = None
+        self._snapshot_cache_at = 0.0
 
     def snapshot(self) -> dict[str, Any]:
+        now = time.monotonic()
+        if self._snapshot_cache is not None and now - self._snapshot_cache_at < self._snapshot_ttl:
+            return dict(self._snapshot_cache)
         cpu = ram = 0.0
         process_mb = 0.0
         try:
@@ -43,7 +50,7 @@ class SystemMonitor:
             pass
         workflow_rows = self.workflows.list()
         agent_rows = self.agents.health()
-        return {
+        snapshot = {
             "cpu_percent": cpu,
             "memory_percent": ram,
             "process_memory_mb": process_mb,
@@ -57,3 +64,6 @@ class SystemMonitor:
             "event_bus": self.bus.metrics(),
             "threads": threading.active_count(),
         }
+        self._snapshot_cache = snapshot
+        self._snapshot_cache_at = now
+        return dict(snapshot)
