@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import math
 import sys
@@ -82,6 +83,7 @@ def main() -> int:
             QDesktopServices,
             QFont,
             QPainter,
+            QPainterPath,
             QPen,
             QPixmap,
             QRadialGradient,
@@ -101,8 +103,13 @@ def main() -> int:
             self.phase = 0.0
             self.drag_start: QPoint | None = None
             self.roam_enabled = bool(args.roam)
-            self.roam_velocity = QPoint(1, 0)
+            self.roam_x = 80.0
+            self.roam_y = 120.0
+            self.roam_vx = 0.85
             self.robot = QPixmap(str(ROOT / "nexora_os" / "assets" / "jarvis_robot_pet.png"))
+            self.robot_frames = self._build_robot_frames()
+            self.status_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="jarvis-pet-status")
+            self.status_future: concurrent.futures.Future[PetState] | None = None
             self.setWindowTitle("Jarvis Pet")
             self.setFixedSize(230, 292)
             self.setWindowFlags(
@@ -112,18 +119,36 @@ def main() -> int:
             )
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             self.setMouseTracking(True)
-            self.move(80, 120)
+            self.move(int(self.roam_x), int(self.roam_y))
 
             self.animation_timer = QTimer(self)
             self.animation_timer.timeout.connect(self._tick)
             self.animation_timer.start(33)
 
             self.status_timer = QTimer(self)
-            self.status_timer.timeout.connect(self._refresh_status)
+            self.status_timer.timeout.connect(self._request_status)
             self.status_timer.start(1500)
+            self.future_timer = QTimer(self)
+            self.future_timer.timeout.connect(self._collect_status)
+            self.future_timer.start(120)
+
+        def _build_robot_frames(self) -> list[QPixmap]:
+            if self.robot.isNull():
+                return []
+            base = self.robot.scaled(
+                160,
+                210,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            frames: list[QPixmap] = []
+            for index in range(24):
+                angle = math.sin((index / 24) * math.tau) * 3.5
+                frames.append(base.transformed(QTransform().rotate(angle), Qt.TransformationMode.SmoothTransformation))
+            return frames
 
         def _tick(self) -> None:
-            self.phase = (self.phase + 0.055) % (math.tau)
+            self.phase = (self.phase + 0.052) % (math.tau)
             if self.roam_enabled and self.drag_start is None:
                 self._roam_step()
             self.update()
@@ -132,20 +157,35 @@ def main() -> int:
             self.state = fetch_status(args.backend)
             self.update()
 
+        def _request_status(self) -> None:
+            if self.status_future and not self.status_future.done():
+                return
+            self.status_future = self.status_pool.submit(fetch_status, args.backend)
+
+        def _collect_status(self) -> None:
+            if not self.status_future or not self.status_future.done():
+                return
+            try:
+                self.state = self.status_future.result()
+            except Exception:
+                self.state = PetState(mode="offline", message="Jarvis backend is offline", backend_online=False, last_updated=time.time())
+            finally:
+                self.status_future = None
+            self.update()
+
         def _roam_step(self) -> None:
             screen = QApplication.primaryScreen()
             if screen is None:
                 return
             bounds = screen.availableGeometry()
-            speed = 1 if self.state.mode in {"idle", "offline"} else 2
-            wobble = int(math.sin(self.phase * 0.7) * 1)
-            next_pos = self.pos() + QPoint(self.roam_velocity.x() * speed, wobble)
-            if next_pos.x() < bounds.left() or next_pos.x() + self.width() > bounds.right():
-                self.roam_velocity.setX(-self.roam_velocity.x())
-                next_pos.setX(max(bounds.left(), min(next_pos.x(), bounds.right() - self.width())))
-            if next_pos.y() < bounds.top() or next_pos.y() + self.height() > bounds.bottom():
-                next_pos.setY(max(bounds.top(), min(next_pos.y(), bounds.bottom() - self.height())))
-            self.move(next_pos)
+            speed = 1.0 if self.state.mode in {"idle", "offline"} else 1.7
+            self.roam_x += self.roam_vx * speed
+            self.roam_y += math.sin(self.phase * 0.7) * 0.35
+            if self.roam_x < bounds.left() or self.roam_x + self.width() > bounds.right():
+                self.roam_vx *= -1
+                self.roam_x = max(bounds.left(), min(self.roam_x, bounds.right() - self.width()))
+            self.roam_y = max(bounds.top(), min(self.roam_y, bounds.bottom() - self.height()))
+            self.move(int(round(self.roam_x)), int(round(self.roam_y)))
 
         def mousePressEvent(self, event: Any) -> None:
             if event.button() == Qt.MouseButton.LeftButton:
@@ -156,7 +196,10 @@ def main() -> int:
 
         def mouseMoveEvent(self, event: Any) -> None:
             if self.drag_start is not None and event.buttons() & Qt.MouseButton.LeftButton:
-                self.move(event.globalPosition().toPoint() - self.drag_start)
+                next_pos = event.globalPosition().toPoint() - self.drag_start
+                self.roam_x = float(next_pos.x())
+                self.roam_y = float(next_pos.y())
+                self.move(next_pos)
                 event.accept()
 
         def mouseReleaseEvent(self, event: Any) -> None:
@@ -206,8 +249,14 @@ def main() -> int:
             if screen is None:
                 return
             bounds = screen.availableGeometry()
-            self.move(bounds.right() - self.width() - 24, bounds.top() + 24)
+            self.roam_x = float(bounds.right() - self.width() - 24)
+            self.roam_y = float(bounds.top() + 24)
+            self.move(int(self.roam_x), int(self.roam_y))
             self.roam_enabled = False
+
+        def closeEvent(self, event: Any) -> None:
+            self.status_pool.shutdown(wait=False, cancel_futures=True)
+            event.accept()
 
         def paintEvent(self, event: Any) -> None:
             painter = QPainter(self)
@@ -237,20 +286,19 @@ def main() -> int:
             painter.drawEllipse(QRectF(cx - radius * 1.6, cy - radius * 1.6, radius * 3.2, radius * 3.2))
 
             shadow_width = 84 + math.sin(self.phase) * 8
-            painter.setBrush(QColor(0, 0, 0, 45))
+            shadow = QRadialGradient(115, 226, 64)
+            shadow.setColorAt(0.0, QColor(0, 0, 0, 62))
+            shadow.setColorAt(0.75, QColor(0, 0, 0, 20))
+            shadow.setColorAt(1.0, QColor(0, 0, 0, 0))
+            painter.setBrush(shadow)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(73 - shadow_width / 2 + 42, 217, shadow_width, 17))
 
-            if not self.robot.isNull():
-                robot = self.robot.scaled(
-                    160,
-                    210,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                tilt = math.sin(self.phase * 0.75) * (3 if self.state.mode != "thinking" else 6)
-                transform = QTransform().rotate(tilt)
-                robot = robot.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+            if self.robot_frames:
+                frame_index = int((self.phase / math.tau) * len(self.robot_frames)) % len(self.robot_frames)
+                if self.state.mode == "thinking":
+                    frame_index = int((self.phase * 1.8 / math.tau) * len(self.robot_frames)) % len(self.robot_frames)
+                robot = self.robot_frames[frame_index]
                 x = int((self.width() - robot.width()) / 2 + math.sin(self.phase * 0.55) * 4)
                 y = int(22 + bob)
                 painter.drawPixmap(x, y, robot)
@@ -267,9 +315,11 @@ def main() -> int:
                     painter.drawEllipse(QRectF(44 + i * 64, 30 + math.sin(self.phase + i) * 4, 7, 7))
 
             panel = QRectF(18, 238, 194, 40)
+            panel_path = QPainterPath()
+            panel_path.addRoundedRect(panel, 8, 8)
             painter.setBrush(QColor(3, 7, 18, 205))
             painter.setPen(QPen(QColor(255, 255, 255, 55), 1))
-            painter.drawRoundedRect(panel, 8, 8)
+            painter.drawPath(panel_path)
 
             painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
             painter.setPen(QColor(240, 249, 255))
@@ -298,6 +348,7 @@ def main() -> int:
                         "mode": pet.state.mode,
                         "backend_online": pet.state.backend_online,
                         "robot_asset": not pet.robot.isNull(),
+                        "cached_frames": len(pet.robot_frames),
                         "roam_enabled": pet.roam_enabled,
                         "size": [pet.width(), pet.height()],
                     }
