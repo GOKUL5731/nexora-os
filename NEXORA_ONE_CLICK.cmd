@@ -16,6 +16,19 @@ set "DEFAULT_OLLAMA_MODEL=llama3.1:8b"
 set "CHECK_ONLY=0"
 if /I "%~1"=="--check" set "CHECK_ONLY=1"
 
+if exist "%ROOT%\.env" (
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%ROOT%\.env") do (
+    if not "%%A"=="" if not defined %%A set "%%A=%%B"
+  )
+  echo [OK] Loaded local .env configuration.
+)
+
+set "LIVEKIT_READY=1"
+if not defined LIVEKIT_URL set "LIVEKIT_READY=0"
+if not defined LIVEKIT_API_KEY set "LIVEKIT_READY=0"
+if not defined LIVEKIT_API_SECRET set "LIVEKIT_READY=0"
+if "%LIVEKIT_READY%"=="1" (echo [OK] LiveKit realtime transport configured.) else (echo [INFO] LiveKit disabled: configure LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in .env.)
+
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
 echo ============================================================

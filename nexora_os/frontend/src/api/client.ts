@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_NEXORA_API ?? "http://127.0.0.1:7474";
+const API_BASE = import.meta.env.VITE_NEXORA_API ?? (import.meta.env.DEV ? "http://127.0.0.1:7474" : window.location.origin);
 
 export type ProcessResult = {
   type: string;
@@ -71,6 +71,14 @@ export const nexoraApi = {
   status: () => request<StatusPayload>("/status"),
   health: () => request<HealthSnapshot>("/health"),
   state: () => request<Record<string, unknown>>("/state"),
+  brainStatus: () => request<Record<string, unknown>>("/brain/status"),
+  cognitionStatus: () => request<CognitionStatus>("/cognition/status"),
+  cognitionPerceive: (input: { type: string; content?: string; path?: string; source?: string; remember?: boolean }) =>
+    request<Record<string, unknown>>("/cognition/perceive", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  capabilities: () => request<Record<string, unknown>>("/capabilities"),
   events: (limit = 60) => request<{ events: Array<{ topic: string; payload: unknown; sequence: number }> }>(`/events?limit=${limit}`),
   agents: () => request<{ tool_agents: Array<{ name: string; status: string; tools?: string[] }>; runtime_agents: Array<{ name: string; status: string }> }>("/agents"),
   workflows: () => request<{ workflows: Array<{ name: string; enabled: boolean; last_status?: string; step_count?: number }> }>("/workflows"),
@@ -101,6 +109,15 @@ export const nexoraApi = {
   visionStop: () => request<Record<string, unknown>>("/vision/webcam/stop", { method: "POST" }),
   visionStatus: () => request<Record<string, unknown>>("/vision/status"),
   visionCapture: () => request<Record<string, unknown>>("/vision/capture", { method: "POST" }),
+  visionFrame: () => request<Record<string, unknown>>("/vision/frame", { method: "POST" }),
+  visionFrameWithMouse: () => request<Record<string, unknown>>("/vision/frame/mouse", { method: "POST" }),
+  visionMouseEnable: () => request<Record<string, unknown>>("/vision/mouse/enable", { method: "POST" }),
+  visionMouseDisable: () => request<Record<string, unknown>>("/vision/mouse/disable", { method: "POST" }),
+  visionMouseState: () => request<Record<string, unknown>>("/vision/mouse/state"),
+  visionGesturesEnable: () => request<Record<string, unknown>>("/vision/gestures/enable", { method: "POST" }),
+  visionGesturesDisable: () => request<Record<string, unknown>>("/vision/gestures/disable", { method: "POST" }),
+  visionGesturesCapture: () => request<Record<string, unknown>>("/vision/gestures/capture", { method: "POST" }),
+  visionGesturesState: () => request<Record<string, unknown>>("/vision/gestures/state"),
 
   listGraphs: () => request<{ graphs: Array<{ name: string; node_count: number; edge_count: number }> }>("/workflows/graphs"),
   getGraph: (name: string) => request<GraphSpec>(`/workflows/graph/${encodeURIComponent(name)}`),
@@ -132,6 +149,23 @@ export const nexoraApi = {
   memoryReflect: (query = "") =>
     request<{ reflection: string; memory_ids: number[] }>(`/memory/reflect?query=${encodeURIComponent(query)}`, { method: "POST" }),
 
+  knowledge: () =>
+    request<{
+      status: { domains: number; entries: number; database: string };
+      domains: Array<{ name: string; status: string; summary: string; sources: string[]; updated_at?: number }>;
+    }>("/knowledge"),
+  knowledgeLearn: (domain: string) =>
+    request<Record<string, unknown>>(`/knowledge/learn/${encodeURIComponent(domain)}`, { method: "POST" }),
+  knowledgeSearch: (q: string, domain = "", limit = 8) =>
+    request<{ items: KnowledgeHit[] }>(
+      `/knowledge/search?q=${encodeURIComponent(q)}&domain=${encodeURIComponent(domain)}&limit=${limit}`,
+    ),
+  knowledgeIndex: (domain: string, title: string, content: string, source = "user provided", tags: string[] = []) =>
+    request<Record<string, unknown>>("/knowledge/index", {
+      method: "POST",
+      body: JSON.stringify({ domain, title, content, source, tags }),
+    }),
+
   agentTask: (name: string, task: Record<string, unknown>) =>
     request<Record<string, unknown>>(`/agents/${encodeURIComponent(name)}/tasks`, {
       method: "POST",
@@ -145,10 +179,35 @@ export const nexoraApi = {
     }),
   settings: () => request<Record<string, unknown>>("/settings"),
   voiceStatus: () => request<Record<string, unknown>>("/voice/status"),
+  livekitStatus: () => request<Record<string, unknown>>("/realtime/livekit/status"),
+  livekitToken: (room = "jarvis-ai", identity = "jarvis-user", name = "Jarvis User") =>
+    request<Record<string, unknown>>("/realtime/livekit/token", {
+      method: "POST",
+      body: JSON.stringify({ room, identity, name }),
+    }),
   visionScreen: (ocr = true) =>
     request<Record<string, unknown>>(`/vision/screen?ocr=${ocr}`, { method: "POST" }),
 
   nodeTypes: () => request<{ node_types: string[] }>("/platform/node-types"),
+
+  connectors: () => request<{ connectors: Array<{ name: string; health: string; capabilities: string[] }>; available: number }>("/connectors"),
+  connectorExecute: (name: string, action: string, params: Record<string, unknown> = {}) =>
+    request<Record<string, unknown>>(`/connectors/${encodeURIComponent(name)}/execute`, {
+      method: "POST",
+      body: JSON.stringify({ input: action, context: { action, ...params } }),
+    }),
+
+  companionStatus: () => request<Record<string, unknown>>("/companion/status"),
+  companionPair: (deviceId: string, deviceName: string) =>
+    request<Record<string, unknown>>("/companion/pair", {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, device_name: deviceName, platform: "iOS" }),
+    }),
+  companionSync: (deviceId: string, token: string, clipboard = "", location = {}) =>
+    request<Record<string, unknown>>("/companion/sync", {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, token, clipboard, location }),
+    }),
 };
 
 export type GraphSpec = {
@@ -169,6 +228,30 @@ export type TraceStep = {
 };
 
 export type MemoryHit = { text: string; score?: number; metadata?: Record<string, unknown>; source?: string };
+export type KnowledgeHit = {
+  id: number;
+  domain: string;
+  title: string;
+  content: string;
+  source: string;
+  score?: number;
+  tags?: string[];
+};
+export type CognitionStatus = {
+  identity?: { name?: string; role?: string; truthfulness_rules?: string[]; conversation_style?: string[] };
+  loop?: string[];
+  last_monitor?: Record<string, unknown>;
+  last_context_summary?: {
+    request?: string;
+    source?: string;
+    memory_hits?: number;
+    knowledge_hits?: number;
+    perceived_inputs?: number;
+    voice_language?: string;
+  };
+  memory_count?: number;
+  knowledge?: { domains?: number; entries?: number };
+};
 export type NetworkNode = { id: string; label: string; type?: string };
 export type NetworkEdge = { source: string; target: string };
 

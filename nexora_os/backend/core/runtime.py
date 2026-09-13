@@ -38,6 +38,7 @@ from .error_recovery import ErrorRecoveryManager
 from .startup_manager import StartupManager
 from .shutdown_manager import ShutdownManager
 from ..staging.llm import OllamaClient
+from ..realtime import LiveKitProvider
 from .logger import configure_core_logging
 from .module_manager import ModuleManager
 from .validation import validate_and_sanitize, ValidationError
@@ -62,6 +63,7 @@ class NexoraRuntime:
         self.shutdown_manager = ShutdownManager(self.bus)
 
         self.llm = OllamaClient()
+        self.livekit = LiveKitProvider.from_env()
         self.goals = GoalManager(root / "databases" / "goals.db")
         self.capabilities = CapabilityRegistry()
         self.memory = MemoryEngine(root / "databases" / "memory.db", self.bus, llm=self.llm)

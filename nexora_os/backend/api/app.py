@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -19,6 +20,37 @@ runtime = NexoraRuntime(ROOT)
 app = FastAPI(title="NEXORA OS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+LOCAL_CLIENTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next: Any) -> Response:
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    
+    # 1. Rate Limiting
+    if runtime.security.is_rate_limited(client_ip):
+        return JSONResponse(status_code=429, content={"error": "Too Many Requests"})
+        
+    # 2. Authentication (skip for local, frontend assets, health/status)
+    path = request.url.path
+    if client_ip not in LOCAL_CLIENTS and not path.startswith(("/assets", "/health", "/status", "/companion/pair")):
+        api_key = request.headers.get("X-API-Key")
+        if not api_key or not runtime.security.verify_api_key(api_key):
+            return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+
+    # 3. Process Request
+    response = await call_next(request)
+    
+    # 4. Audit Logging (don't log static assets or frequent status polls to avoid spam)
+    if not path.startswith(("/assets", "/health", "/status")):
+        runtime.security.log_audit(
+            ip_address=client_ip,
+            endpoint=path,
+            method=request.method,
+            status_code=response.status_code,
+            user_agent=request.headers.get("user-agent", "")
+        )
+        
+    return response
 
 class ProcessRequest(BaseModel):
     input: str
@@ -54,8 +86,35 @@ class AgentBuildRequest(BaseModel):
     name: str = ""
 
 
+class ValidateCodeRequest(BaseModel):
+    code: str
+
+
 class AgentTaskRequest(BaseModel):
     task: dict[str, Any] = Field(default_factory=dict)
+
+
+class KnowledgeIndexRequest(BaseModel):
+    domain: str
+    title: str
+    content: str
+    source: str = "user provided"
+    tags: list[str] = Field(default_factory=list)
+
+
+class PerceptionRequest(BaseModel):
+    type: str = "text"
+    content: str = ""
+    path: str = ""
+    source: str = ""
+    remember: bool = True
+
+
+class LiveKitTokenRequest(BaseModel):
+    room: str = "jarvis-ai"
+    identity: str = "jarvis-user"
+    name: str = "Jarvis User"
+    ttl_seconds: int = 3600
 
 
 @app.on_event("startup")
@@ -102,6 +161,70 @@ async def state() -> dict[str, Any]:
     return runtime.bus.state_snapshot()
 
 
+@app.get("/brain/status")
+async def brain_status() -> dict[str, Any]:
+    return runtime.brain.snapshot()
+
+
+@app.get("/cognition/status")
+async def cognition_status() -> dict[str, Any]:
+    return runtime.cognition.status()
+
+
+@app.post("/cognition/perceive")
+async def cognition_perceive(request: PerceptionRequest) -> dict[str, Any]:
+    return runtime.cognition.perceive(request.model_dump(exclude={"remember"}), remember=request.remember)
+
+
+@app.get("/capabilities")
+async def capabilities() -> dict[str, Any]:
+    return {
+        "capabilities": runtime.capabilities.discover_capabilities(),
+        "health": runtime.capabilities.health_check(),
+    }
+
+
+
+@app.get("/knowledge")
+async def knowledge_status() -> dict[str, Any]:
+    return {"status": runtime.knowledge.status(), "domains": runtime.knowledge.domains()}
+
+
+@app.post("/knowledge/learn/{domain}")
+async def knowledge_learn(domain: str, web: bool = False) -> dict[str, Any]:
+    """Learn a domain. Pass ?web=true to fetch real documentation from the web."""
+    if web:
+        return await asyncio.to_thread(runtime.knowledge.web_learn_domain, domain)
+    return runtime.knowledge.learn_domain(domain)
+
+
+@app.get("/knowledge/search")
+async def knowledge_search(q: str, domain: str = "", limit: int = 8) -> dict[str, Any]:
+    return {"items": runtime.knowledge.search(q, domain, limit)}
+
+
+@app.post("/knowledge/index")
+async def knowledge_index(request: KnowledgeIndexRequest) -> dict[str, Any]:
+    return runtime.knowledge.index_text(request.domain, request.title, request.content, request.source, request.tags)
+
+
+# ─── Conversation Memory Routes ──────────────────────────────────────────────
+
+@app.get("/conversation/sessions")
+async def conversation_sessions() -> dict[str, Any]:
+    return {"sessions": runtime.conversation.list_sessions(), "total_turns": runtime.conversation.count()}
+
+
+@app.get("/conversation/{session_id}")
+async def conversation_get(session_id: str, limit: int = 50) -> dict[str, Any]:
+    return {"turns": runtime.conversation.get_session(session_id, limit)}
+
+
+@app.delete("/conversation/{session_id}")
+async def conversation_clear(session_id: str) -> dict[str, Any]:
+    return runtime.conversation.clear_session(session_id)
+
+
 @app.get("/events")
 async def events(limit: int = 80) -> dict[str, Any]:
     return {"events": runtime.bus.history(min(limit, 200))}
@@ -116,6 +239,55 @@ async def agents() -> dict[str, Any]:
 @app.get("/tools")
 async def tools() -> dict[str, Any]:
     return {"tools": runtime.automation.status()["registered_actions"]}
+
+
+@app.get("/connectors")
+async def connectors() -> dict[str, Any]:
+    registry = getattr(runtime, "connector_registry", None)
+    if registry:
+        manifest = registry.manifest()
+        return {
+            "connectors": [
+                {"name": name, "health": info["health"], "capabilities": info["capabilities"]}
+                for name, info in manifest.items()
+            ],
+            "available": len(registry.available_connectors()),
+            "capability_list": registry.capabilities(),
+        }
+    manager = getattr(runtime, "connector_manager", None)
+    if not manager:
+        return {"connectors": [], "available": 0}
+    health = manager.health_all()
+    available = manager.list_available()
+    return {
+        "connectors": [
+            {"name": name, "health": status, "capabilities": getattr(manager.get(name), "get_capabilities", lambda: [])()}
+            for name, status in health.items()
+        ],
+        "available": len(available),
+    }
+
+
+
+@app.post("/connectors/{name}/execute")
+async def connector_execute(name: str, request: ProcessRequest) -> dict[str, Any]:
+    manager = getattr(runtime, "connector_manager", None)
+    if not manager:
+        raise HTTPException(status_code=503, detail="Connector manager not initialized")
+    connector = manager.get(name)
+    if not connector:
+        raise HTTPException(status_code=404, detail=f"Connector '{name}' not found")
+    action = request.context.get("action", "")
+    params = {k: v for k, v in request.context.items() if k != "action"}
+    execute_fn = getattr(connector, "execute", None)
+    if not execute_fn:
+        raise HTTPException(status_code=400, detail="Connector has no execute method")
+    import asyncio as _asyncio
+    if _asyncio.iscoroutinefunction(execute_fn):
+        result = await execute_fn(action, params)
+    else:
+        result = execute_fn(action, params)
+    return result
 
 
 @app.post("/nlp/process")
@@ -140,12 +312,30 @@ async def agent_task(name: str, request: AgentTaskRequest) -> dict[str, Any]:
 
 @app.post("/agents/build")
 async def build_agent(request: AgentBuildRequest) -> dict[str, Any]:
-    return runtime.creator.create(request.description, request.name)
+    """Generate, validate and register a new agent using the AI Lab."""
+    if not runtime._config_bool("agent_creation_enabled", False):
+        raise HTTPException(status_code=503, detail="Agent creation is disabled in recovery mode.")
+    result = await asyncio.to_thread(runtime.creator.create, request.description, request.name)
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result)
+    return result
 
 
 @app.get("/agents/generated")
 async def generated_agents() -> dict[str, Any]:
     return {"agents": runtime.creator.list()}
+
+
+@app.get("/ai_lab/status")
+async def ai_lab_status() -> dict[str, Any]:
+    """Return AI Lab state: registered agents, LLM availability."""
+    return runtime.creator.status()
+
+
+@app.post("/ai_lab/validate")
+async def ai_lab_validate(request: ValidateCodeRequest) -> dict[str, Any]:
+    """AST-validate Python code against the AI Lab security policy."""
+    return runtime.creator.validate(request.code)
 
 
 @app.get("/workflows")
@@ -327,9 +517,80 @@ async def settings() -> dict[str, Any]:
         "voice": runtime.voice.health(),
         "vision": runtime.vision.health(),
         "memory": {"database": str(runtime.memory.database), "chunks": runtime.memory.count()},
-        "security": {"generated_code_execution": False, "agent_sandbox": str(runtime.creator.sandbox)},
+        "security": {
+            "generated_code_execution": False,
+            "agent_creation_enabled": False,
+            "agent_sandbox": str(runtime.creator.sandbox),
+        },
         "llm": runtime.llm.status(),
+        "realtime": {"livekit": runtime.livekit.status()},
     }
+
+
+@app.get("/realtime/livekit/status")
+async def livekit_status() -> dict[str, Any]:
+    return runtime.livekit.status()
+
+
+@app.post("/realtime/livekit/token")
+async def livekit_token(request: LiveKitTokenRequest) -> dict[str, Any]:
+    result = runtime.livekit.issue_token(
+        room=request.room,
+        identity=request.identity,
+        name=request.name,
+        ttl_seconds=request.ttl_seconds,
+    )
+    if not result["ok"]:
+        raise HTTPException(status_code=503, detail=result)
+    return result
+
+
+# ─── iPhone Companion API Routes ──────────────────────────────────────────────
+
+class CompanionPairRequest(BaseModel):
+    device_id: str
+    device_name: str
+    platform: str = "iOS"
+
+
+class CompanionSyncRequest(BaseModel):
+    device_id: str
+    token: str
+    clipboard: str = ""
+    location: dict[str, float] = Field(default_factory=dict)
+    notifications: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@app.post("/companion/pair")
+async def companion_pair(request: CompanionPairRequest) -> dict[str, Any]:
+    """Secure pairing endpoint for iPhone Companion app."""
+    return runtime.companion.pair_device(
+        device_id=request.device_id,
+        device_name=request.device_name,
+        platform=request.platform,
+    )
+
+
+@app.get("/companion/status")
+async def companion_status() -> dict[str, Any]:
+    """Status of paired companion devices and sync state."""
+    status_data = runtime.companion.status()
+    status_data["desktop_status"] = await status()
+    return status_data
+
+
+@app.post("/companion/sync")
+async def companion_sync(request: CompanionSyncRequest) -> dict[str, Any]:
+    """Sync clipboard, location, and notification payload from iPhone companion."""
+    if not runtime.companion.verify_token(request.device_id, request.token):
+        raise HTTPException(status_code=401, detail="Invalid token for device")
+
+    return runtime.companion.sync_data(
+        device_id=request.device_id,
+        clipboard=request.clipboard,
+        location=request.location,
+        notifications=request.notifications,
+    )
 
 
 @app.websocket("/ws/events")
@@ -362,6 +623,9 @@ async def websocket_events(websocket: WebSocket) -> None:
 
 
 def mount_frontend() -> None:
+    if getattr(app.state, "frontend_mounted", False):
+        return
+
     dist = ROOT / "frontend" / "dist"
     if not dist.exists():
         return
@@ -371,6 +635,9 @@ def mount_frontend() -> None:
         return FileResponse(dist / "index.html")
 
     app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+    app.state.frontend_mounted = True
+
+mount_frontend()
 
 
 if __name__ == "__main__":
@@ -383,3 +650,4 @@ if __name__ == "__main__":
     if args.serve_ui:
         mount_frontend()
     uvicorn.run(app, host="127.0.0.1", port=args.port)
+
