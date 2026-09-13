@@ -75,7 +75,7 @@ class AutomationEngine:
             )
 
         # ── Browser ─────────────────────────────────────────────────────
-        elif "chatgpt" in normalized:
+        elif "chatgpt" in normalized or "chat gpt" in normalized:
             result = await self._open_chatgpt(command)
 
         elif self._is_common_site_command(normalized):
@@ -276,11 +276,12 @@ class AutomationEngine:
         return None
 
     def _is_common_site_command(self, normalized: str) -> bool:
-        return bool(re.match(r"^(open|launch|start)?\s*(google|youtube|gmail|maps|chatgpt)\s*$", normalized))
+        return bool(re.match(r"^(open|launch|start)?\s*(google|youtube|gmail|maps|chatgpt|chat gpt)\s*$", normalized))
 
     def _common_site_url(self, normalized: str) -> str:
-        match = re.search(r"\b(google|youtube|gmail|maps)\b", normalized)
+        match = re.search(r"\b(google|youtube|gmail|maps|chatgpt|chat gpt)\b", normalized)
         site = match.group(1) if match else "google"
+        site = site.replace(" ", "")
         return {
             "google": "https://www.google.com",
             "youtube": "https://www.youtube.com",

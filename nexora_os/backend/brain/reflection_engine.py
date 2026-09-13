@@ -41,7 +41,10 @@ class ReflectionEngine:
             res_clean = {k: v for k, v in meaningful_steps[-1].get("result", {}).items() if k not in ["ok", "path", "image"]}
             summary = json.dumps(res_clean) if res_clean else "Action completed successfully."
         elif failed_steps:
-            summary = f"Failed on action: {failed_steps[0].get('action')} - Error: {failed_steps[0].get('error')}"
+            failed = failed_steps[0]
+            result = failed.get("result") if isinstance(failed.get("result"), dict) else {}
+            detail = failed.get("error") or result.get("error") or result.get("message") or "Unknown failure"
+            summary = f"Failed on action: {failed.get('action')} - Error: {detail}"
         else:
             summary = "Action completed."
 

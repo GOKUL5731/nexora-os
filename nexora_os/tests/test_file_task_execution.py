@@ -100,17 +100,23 @@ def test_runtime_opens_chatgpt_and_types_without_ui_action_failure(tmp_path: Pat
 
             browser.execute = fake_browser_execute
             runtime.automation._type_text_keyboard_fallback = lambda text: {"ok": True}
-            return await runtime.process(
+            compact = await runtime.process(
                 "open chatgpt and type hi",
                 {"speak": False, "session_id": "chatgpt"},
             )
+            spaced = await runtime.process(
+                "open chat gpt and type hi",
+                {"speak": False, "session_id": "chatgpt"},
+            )
+            return compact, spaced
         finally:
             await runtime.shutdown()
 
-    result = asyncio.run(run())
+    compact, spaced = asyncio.run(run())
 
-    assert result["ok"] is True
-    assert result["url"] == "https://chatgpt.com"
-    assert result["typed_text"] == "hi"
-    assert result["verification"]["typed_text_sent"] is True
-    assert "execute_ui_action" not in result["message"]
+    for result in (compact, spaced):
+        assert result["ok"] is True
+        assert result["url"] == "https://chatgpt.com"
+        assert result["typed_text"] == "hi"
+        assert result["verification"]["typed_text_sent"] is True
+        assert "execute_ui_action" not in result["message"]
