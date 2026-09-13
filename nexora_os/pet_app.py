@@ -14,6 +14,16 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BACKEND = "http://127.0.0.1:7474"
+PET_MODEL_CANDIDATES = (
+    ROOT / "nexora_os" / "assets" / "pet_model.glb",
+    ROOT / "nexora_os" / "assets" / "pet_model.gltf",
+    ROOT / "models" / "pet_model.glb",
+    ROOT / "models" / "pet_model.gltf",
+)
+MESHY_SOURCE_URLS = (
+    "https://www.meshy.ai/s/XeMdqG",
+    "https://www.meshy.ai/s/ATvJqY",
+)
 
 
 def post_json(base_url: str, path: str, payload: dict[str, Any], timeout: float = 60.0) -> dict[str, Any]:
@@ -83,6 +93,7 @@ def main() -> int:
     parser.add_argument("--backend", default=DEFAULT_BACKEND)
     parser.add_argument("--dashboard-title", default="Jarvis Command Center")
     parser.add_argument("--dashboard-url", default="")
+    parser.add_argument("--model", type=Path, help="Path to an exported GLB/GLTF pet model")
     parser.add_argument("--roam", action="store_true", help="Start with gentle desktop roaming enabled")
     parser.add_argument("--smoke-test", action="store_true", help="Create the pet UI, render one frame, and exit")
     parser.add_argument("--screenshot", type=Path, help="Save a screenshot during smoke test")
@@ -122,6 +133,8 @@ def main() -> int:
             self.roam_vx = 0.85
             self.robot = QPixmap(str(ROOT / "nexora_os" / "assets" / "jarvis_robot_pet.png"))
             self.robot_frames = self._build_robot_frames()
+            self.pet_model = self._resolve_pet_model(args.model)
+            self.model_viewer_available = False
             self.status_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="jarvis-pet-status")
             self.command_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="jarvis-pet-command")
             self.status_future: concurrent.futures.Future[PetState] | None = None
@@ -137,6 +150,7 @@ def main() -> int:
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             self.setMouseTracking(True)
             self.move(int(self.roam_x), int(self.roam_y))
+            self._build_model_viewer()
             self._build_controls()
 
             self.animation_timer = QTimer(self)
@@ -152,6 +166,93 @@ def main() -> int:
             self.command_timer = QTimer(self)
             self.command_timer.timeout.connect(self._collect_commands)
             self.command_timer.start(120)
+
+        def _resolve_pet_model(self, explicit: Path | None) -> Path | None:
+            candidates: list[Path] = []
+            if explicit:
+                candidates.append(explicit)
+            env_model = str(__import__("os").environ.get("JARVIS_PET_MODEL") or "").strip()
+            if env_model:
+                candidates.append(Path(env_model))
+            candidates.extend(PET_MODEL_CANDIDATES)
+            for candidate in candidates:
+                resolved = candidate if candidate.is_absolute() else ROOT / candidate
+                if resolved.exists() and resolved.suffix.lower() in {".glb", ".gltf"}:
+                    return resolved.resolve()
+            return None
+
+        def _build_model_viewer(self) -> None:
+            self.model_view = None
+            if self.pet_model is None:
+                return
+            try:
+                from PySide6.QtWebEngineWidgets import QWebEngineView
+            except ImportError:
+                return
+            view = QWebEngineView(self)
+            view.setGeometry(0, 0, self.width(), 224)
+            view.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            view.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            view.setStyleSheet("background: transparent;")
+            try:
+                view.page().setBackgroundColor(QColor(0, 0, 0, 0))
+            except Exception:
+                pass
+            model_src = json.dumps(self.pet_model.as_uri())
+            sources = json.dumps(list(MESHY_SOURCE_URLS))
+            html = f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body {{
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+    }}
+    model-viewer {{
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      --progress-bar-color: transparent;
+      --progress-bar-height: 0;
+    }}
+  </style>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+</head>
+<body>
+  <model-viewer
+    id="pet"
+    src={model_src}
+    autoplay
+    auto-rotate
+    auto-rotate-delay="0"
+    rotation-per-second="28deg"
+    camera-controls
+    interaction-prompt="none"
+    disable-zoom
+    shadow-intensity="0.45"
+    exposure="1.1"
+    camera-orbit="0deg 74deg 2.7m"
+    field-of-view="28deg"
+    data-meshy-sources='{sources}'>
+  </model-viewer>
+  <script>
+    const pet = document.getElementById('pet');
+    pet.addEventListener('load', () => {{
+      const names = pet.availableAnimations || [];
+      if (names.length && !pet.animationName) pet.animationName = names[0];
+      pet.play && pet.play();
+    }});
+  </script>
+</body>
+</html>"""
+            view.setHtml(html, QUrl.fromLocalFile(str(ROOT)))
+            view.show()
+            self.model_view = view
+            self.model_viewer_available = True
 
         def _build_controls(self) -> None:
             self.command_input = QLineEdit(self)
@@ -463,7 +564,9 @@ $focused = $false
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(cx - radius * 1.6, cy - radius * 1.6, radius * 3.2, radius * 3.2))
 
-            if self.robot_frames:
+            if self.model_viewer_available:
+                pass
+            elif self.robot_frames:
                 frame_index = int((self.phase / math.tau) * len(self.robot_frames)) % len(self.robot_frames)
                 if self.state.mode == "thinking":
                     frame_index = int((self.phase * 1.8 / math.tau) * len(self.robot_frames)) % len(self.robot_frames)
@@ -509,6 +612,8 @@ $focused = $false
                         "mode": pet.state.mode,
                         "backend_online": pet.state.backend_online,
                         "robot_asset": not pet.robot.isNull(),
+                        "pet_model": str(pet.pet_model) if pet.pet_model else "",
+                        "model_viewer_available": pet.model_viewer_available,
                         "cached_frames": len(pet.robot_frames),
                         "roam_enabled": pet.roam_enabled,
                         "size": [pet.width(), pet.height()],
