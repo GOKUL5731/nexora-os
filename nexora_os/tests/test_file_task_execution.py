@@ -83,3 +83,34 @@ def test_runtime_remembers_created_file_for_followup_open(tmp_path: Path, monkey
     assert "Create a file called gokul.txt" in summary["message"]
     assert opened_result["ok"] is True
     assert opened == [str(target)]
+
+
+def test_runtime_opens_chatgpt_and_types_without_ui_action_failure(tmp_path: Path):
+    async def run():
+        runtime = NexoraRuntime(tmp_path)
+        await runtime.start()
+        try:
+            browser = runtime.connector_manager.get("browser")
+            original_execute = browser.execute
+
+            def fake_browser_execute(action, params):
+                if action == "open_url":
+                    return {"ok": True, "url": params["url"], "message": f"Opened {params['url']}"}
+                return original_execute(action, params)
+
+            browser.execute = fake_browser_execute
+            runtime.automation._type_text_keyboard_fallback = lambda text: {"ok": True}
+            return await runtime.process(
+                "open chatgpt and type hi",
+                {"speak": False, "session_id": "chatgpt"},
+            )
+        finally:
+            await runtime.shutdown()
+
+    result = asyncio.run(run())
+
+    assert result["ok"] is True
+    assert result["url"] == "https://chatgpt.com"
+    assert result["typed_text"] == "hi"
+    assert result["verification"]["typed_text_sent"] is True
+    assert "execute_ui_action" not in result["message"]

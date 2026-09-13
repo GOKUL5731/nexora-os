@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import subprocess
+import time
 import webbrowser
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -74,6 +75,9 @@ class AutomationEngine:
             )
 
         # ── Browser ─────────────────────────────────────────────────────
+        elif "chatgpt" in normalized:
+            result = await self._open_chatgpt(command)
+
         elif self._is_common_site_command(normalized):
             url = self._common_site_url(normalized)
             result = await self._connector_exec(
@@ -272,7 +276,7 @@ class AutomationEngine:
         return None
 
     def _is_common_site_command(self, normalized: str) -> bool:
-        return bool(re.match(r"^(open|launch|start)?\s*(google|youtube|gmail|maps)\s*$", normalized))
+        return bool(re.match(r"^(open|launch|start)?\s*(google|youtube|gmail|maps|chatgpt)\s*$", normalized))
 
     def _common_site_url(self, normalized: str) -> str:
         match = re.search(r"\b(google|youtube|gmail|maps)\b", normalized)
@@ -282,7 +286,66 @@ class AutomationEngine:
             "youtube": "https://www.youtube.com",
             "gmail": "https://mail.google.com",
             "maps": "https://www.google.com/maps",
+            "chatgpt": "https://chatgpt.com",
         }[site]
+
+    async def _open_chatgpt(self, command: str) -> dict[str, Any]:
+        url = "https://chatgpt.com"
+        text_to_type = self._extract_type_text(command)
+        opened = await self._connector_exec(
+            "browser",
+            "open_url",
+            {"url": url},
+            fallback=lambda: webbrowser.open(url) or {"ok": True, "url": url, "message": f"Opened {url}"},
+        )
+        if not opened.get("ok"):
+            return opened
+
+        if not text_to_type:
+            return {
+                "ok": True,
+                "url": url,
+                "message": "Opened ChatGPT.",
+                "verification": {"opened_url": True, "typed_text_sent": False},
+                "permission_checked": True,
+            }
+
+        typed = await asyncio.to_thread(self._type_text_keyboard_fallback, text_to_type)
+        return {
+            "ok": bool(typed.get("ok")),
+            "url": url,
+            "typed_text": text_to_type,
+            "message": (
+                f"Opened ChatGPT and sent text to the active browser window: {text_to_type}"
+                if typed.get("ok")
+                else f"Opened ChatGPT, but failed to type text: {typed.get('error')}"
+            ),
+            "verification": {
+                "opened_url": True,
+                "typed_text_sent": bool(typed.get("ok")),
+                "content_verified": False,
+                "note": "Browser text focus is controlled by the active web page and cannot be independently verified by this fallback.",
+            },
+            "permission_checked": True,
+        }
+
+    def _extract_type_text(self, command: str) -> str:
+        match = re.search(r"\btype\s+(.+)$", command, flags=re.IGNORECASE)
+        if not match:
+            return ""
+        text = match.group(1).strip()
+        text = re.sub(r"^(in|into|on)\s+(chatgpt|chat gpt)\s+", "", text, flags=re.IGNORECASE)
+        return text.strip().strip("\"'")
+
+    def _type_text_keyboard_fallback(self, text: str) -> dict[str, Any]:
+        try:
+            import pyautogui
+
+            time.sleep(4.0)
+            pyautogui.write(text, interval=0.02)
+            return {"ok": True}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
 
     def _extract_filename(self, command: str) -> str | None:
         quoted = re.search(r"['\"]([^'\"]+\.[A-Za-z0-9_.-]+)['\"]", command)
