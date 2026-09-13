@@ -70,6 +70,8 @@ def fetch_status(base_url: str, timeout: float = 0.8) -> PetState:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Jarvis floating Windows pet")
     parser.add_argument("--backend", default=DEFAULT_BACKEND)
+    parser.add_argument("--dashboard-title", default="Jarvis Command Center")
+    parser.add_argument("--dashboard-url", default="")
     parser.add_argument("--roam", action="store_true", help="Start with gentle desktop roaming enabled")
     parser.add_argument("--smoke-test", action="store_true", help="Create the pet UI, render one frame, and exit")
     parser.add_argument("--screenshot", type=Path, help="Save a screenshot during smoke test")
@@ -102,6 +104,7 @@ def main() -> int:
             self.state = fetch_status(args.backend)
             self.phase = 0.0
             self.drag_start: QPoint | None = None
+            self.press_pos: QPoint | None = None
             self.roam_enabled = bool(args.roam)
             self.roam_x = 80.0
             self.roam_y = 120.0
@@ -190,6 +193,7 @@ def main() -> int:
         def mousePressEvent(self, event: Any) -> None:
             if event.button() == Qt.MouseButton.LeftButton:
                 self.drag_start = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                self.press_pos = event.globalPosition().toPoint()
                 event.accept()
             elif event.button() == Qt.MouseButton.RightButton:
                 self._show_menu(event.globalPosition().toPoint())
@@ -203,7 +207,12 @@ def main() -> int:
                 event.accept()
 
         def mouseReleaseEvent(self, event: Any) -> None:
+            if event.button() == Qt.MouseButton.LeftButton and self.press_pos is not None:
+                moved = event.globalPosition().toPoint() - self.press_pos
+                if abs(moved.x()) < 4 and abs(moved.y()) < 4:
+                    self._open_command_center()
             self.drag_start = None
+            self.press_pos = None
             event.accept()
 
         def mouseDoubleClickEvent(self, event: Any) -> None:
@@ -227,11 +236,60 @@ def main() -> int:
             menu.exec(position)
 
         def _open_command_center(self) -> None:
+            if sys.platform == "win32" and self._focus_dashboard_window():
+                return
+            target = args.dashboard_url or args.backend
+            QDesktopServices.openUrl(QUrl(target))
+
+        def _focus_dashboard_window(self) -> bool:
+            import json as _json
             import subprocess
 
-            launcher = ROOT / "run_project.cmd"
-            if launcher.exists() and sys.platform == "win32":
-                subprocess.Popen(["cmd", "/c", "start", "", str(launcher)], cwd=str(ROOT))
+            title = args.dashboard_title.replace("'", "''")
+            script = f"""
+$title = '{title}'
+$sig = @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class Win32FocusJarvis {{
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+}}
+'@
+Add-Type $sig -ErrorAction SilentlyContinue
+$focused = $false
+[Win32FocusJarvis]::EnumWindows({{
+  param($hWnd, $lParam)
+  if ([Win32FocusJarvis]::IsWindowVisible($hWnd)) {{
+    $builder = New-Object System.Text.StringBuilder 512
+    [void][Win32FocusJarvis]::GetWindowText($hWnd, $builder, $builder.Capacity)
+    if ($builder.ToString().Contains($title)) {{
+      [void][Win32FocusJarvis]::SetForegroundWindow($hWnd)
+      $script:focused = $true
+      return $false
+    }}
+  }}
+  return $true
+}}, [IntPtr]::Zero) | Out-Null
+@{{ focused = $focused }} | ConvertTo-Json -Compress
+"""
+            try:
+                completed = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", script],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                if completed.returncode != 0 or not completed.stdout.strip():
+                    return False
+                return bool(_json.loads(completed.stdout).get("focused"))
+            except Exception:
+                return False
 
         def _open_project_folder(self) -> None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(ROOT)))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import socket
+import argparse
 import subprocess
 import sys
 import time
@@ -37,7 +38,8 @@ def _start_backend() -> subprocess.Popen | None:
     logs.mkdir(parents=True, exist_ok=True)
     stdout = open(logs / "desktop_backend.out.log", "a", encoding="utf-8")
     stderr = open(logs / "desktop_backend.err.log", "a", encoding="utf-8")
-    return subprocess.Popen(
+    try:
+        return subprocess.Popen(
         [
             sys.executable,
             "-m",
@@ -50,12 +52,78 @@ def _start_backend() -> subprocess.Popen | None:
         stdout=stdout,
         stderr=stderr,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+        )
+    finally:
+        stdout.close()
+        stderr.close()
+
+
+def _start_pet() -> subprocess.Popen | None:
+    logs = ROOT / "nexora_os" / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    stdout = open(logs / "pet.out.log", "a", encoding="utf-8")
+    stderr = open(logs / "pet.err.log", "a", encoding="utf-8")
+    try:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "nexora_os.pet_app",
+                "--backend",
+                URL,
+                "--dashboard-title",
+                "Jarvis Command Center",
+                "--dashboard-url",
+                URL,
+            ],
+            cwd=ROOT,
+            stdout=stdout,
+            stderr=stderr,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    finally:
+        stdout.close()
+        stderr.close()
+
+
+def _stop_backend(backend: subprocess.Popen | None) -> None:
+    if backend and backend.poll() is None:
+        backend.terminate()
+        try:
+            backend.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            backend.kill()
+            backend.wait(timeout=5)
+
+
+def _stop_process(process: subprocess.Popen | None) -> None:
+    if process and process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
 
 def main() -> int:
+    global PORT, URL
+    if not _port_is_open(PORT):
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", PORT))
+            except OSError:
+                probe.bind(("127.0.0.1", 0))
+                PORT = probe.getsockname()[1]
+                URL = f"http://127.0.0.1:{PORT}"
+                print(f"Default port unavailable. Backend: {URL}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--smoke-test", action="store_true", help="Open the real desktop UI, verify rendered content, then exit")
+    parser.add_argument("--screenshot", type=Path, help="Save the rendered desktop window during a smoke test")
+    parser.add_argument("--no-pet", action="store_true", help="Do not launch the floating Jarvis pet")
+    args = parser.parse_args()
     try:
-        from PySide6.QtCore import QUrl
+        from PySide6.QtCore import QUrl, QTimer
         from PySide6.QtWidgets import QApplication, QMainWindow
         from PySide6.QtWebEngineWidgets import QWebEngineView
     except ImportError as exc:
@@ -67,16 +135,36 @@ def main() -> int:
     backend = _start_backend()
     if not _wait_for_backend():
         print("NEXORA backend did not start. Check nexora_os\\logs\\desktop_backend.err.log")
+        _stop_backend(backend)
         return 1
 
+    pet = None if args.no_pet or args.smoke_test else _start_pet()
+
     app = QApplication(sys.argv)
-    app.setApplicationName("NEXORA OS")
+    app.setApplicationName("Jarvis")
 
     window = QMainWindow()
-    window.setWindowTitle("NEXORA OS Command Center")
+    window.setWindowTitle("Jarvis Command Center")
     window.resize(1440, 900)
 
     view = QWebEngineView()
+    if args.smoke_test:
+        def check_content(ok: bool) -> None:
+            if not ok:
+                app.exit(1)
+                return
+            def inspected(text: str) -> None:
+                valid = isinstance(text, str) and "LIVE TELEMETRY" in text
+                print(f"Desktop rendered content: {len(text or '')} characters; passed={valid}")
+                if args.screenshot:
+                    args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                    if not window.grab().save(str(args.screenshot)):
+                        app.exit(1)
+                        return
+                app.exit(0 if valid else 1)
+            QTimer.singleShot(10000, lambda: view.page().runJavaScript("document.body.innerText", inspected))
+        view.loadFinished.connect(check_content)
+        QTimer.singleShot(30000, lambda: app.exit(2))
     view.setUrl(QUrl(URL))
     window.setCentralWidget(view)
     window.showMaximized()
@@ -84,12 +172,8 @@ def main() -> int:
     try:
         return app.exec()
     finally:
-        if backend and backend.poll() is None:
-            backend.terminate()
-            try:
-                backend.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                backend.kill()
+        _stop_process(pet)
+        _stop_backend(backend)
 
 
 if __name__ == "__main__":
