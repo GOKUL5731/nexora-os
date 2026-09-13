@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -9,8 +10,13 @@ import cv2
 import numpy as np
 import pyautogui
 import pytesseract
-from PIL import ImageGrab
-from ultralytics import YOLO
+from PIL import Image
+import mss
+
+try:
+    from ultralytics import YOLO
+except ImportError:  # Optional: object detection is disabled without this package.
+    YOLO = None
 
 from ..core.event_bus import EventBus
 from ..core.cache import Cache
@@ -35,26 +41,56 @@ class VisionEngine:
         self.hands_detector = None
         self.mouse_control_enabled = False
         self.mouse_state = {"x": 0, "y": 0, "click": False, "scroll": 0}
+        self.object_model = None
+        self.object_model_error = ""
+        self.object_model_path = self._find_object_model()
+        self.continuous_running = False
+        self.continuous_task = None
+        self.last_objects: list[dict[str, Any]] = []
+        self.last_object_scan_at = 0.0
         
         # QR code detector
         self.qr_detector = QRCodeDetector() if QR_CODE_AVAILABLE else None
 
+    def _find_object_model(self) -> Path | None:
+        configured = os.environ.get("NEXORA_YOLO_MODEL", "").strip()
+        candidates = []
+        if configured:
+            candidates.append(Path(configured))
+        package_root = Path(__file__).resolve().parents[2]
+        repo_root = Path(__file__).resolve().parents[3]
+        candidates.extend([
+            package_root / "models" / "yolov8n.pt",
+            repo_root / "models" / "yolov8n.pt",
+        ])
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
     async def start(self) -> dict[str, Any]:
-        return await asyncio.to_thread(self._start)
+        result = await asyncio.to_thread(self._start)
+        if result.get("ok") and not self.continuous_running:
+            self.continuous_running = True
+            self.continuous_task = asyncio.create_task(self._continuous_loop())
+        return result
 
     def _start(self) -> dict[str, Any]:
         try:
             if self.camera is None:
-                self.camera = cv2.VideoCapture(0)
-                # Try to read a test frame to ensure camera is actually working
-                ret, frame = self.camera.read()
-                if not ret or frame is None:
-                    self.camera.release()
-                    self.camera = None
+                camera, frame, backend_name, index = self._open_camera()
+                if camera is None or frame is None:
                     result = {"ok": False, "error": "Camera initialized but failed to read frame", "webcam": "unavailable"}
                 else:
-                    ok = bool(self.camera and self.camera.isOpened())
-                    result = {"ok": ok, "webcam": "running" if ok else "unavailable"}
+                    self.camera = camera
+                    result = {
+                        "ok": True,
+                        "webcam": "running",
+                        "backend": backend_name,
+                        "camera_index": index,
+                        "width": int(frame.shape[1]),
+                        "height": int(frame.shape[0]),
+                    }
             else:
                 ok = bool(self.camera and self.camera.isOpened())
                 result = {"ok": ok, "webcam": "running" if ok else "unavailable"}
@@ -63,13 +99,74 @@ class VisionEngine:
         self._sync(result)
         return result
 
+    def _open_camera(self) -> tuple[Any | None, Any | None, str, int]:
+        backends = [
+            ("DirectShow", getattr(cv2, "CAP_DSHOW", 0)),
+            ("MSMF", getattr(cv2, "CAP_MSMF", 0)),
+            ("Default", getattr(cv2, "CAP_ANY", 0)),
+        ]
+        for index in range(4):
+            for backend_name, backend in backends:
+                camera = cv2.VideoCapture(index, backend)
+                if not camera or not camera.isOpened():
+                    if camera:
+                        camera.release()
+                    continue
+                camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                frame = None
+                for _ in range(8):
+                    ok, candidate = camera.read()
+                    if ok and candidate is not None:
+                        frame = candidate
+                        break
+                    time.sleep(0.08)
+                if frame is not None:
+                    return camera, frame, backend_name, index
+                camera.release()
+        return None, None, "", -1
+
     async def stop(self) -> dict[str, Any]:
+        self.continuous_running = False
+        if self.continuous_task:
+            self.continuous_task.cancel()
+            self.continuous_task = None
         if self.camera is not None:
             await asyncio.to_thread(self.camera.release)
             self.camera = None
         result = {"ok": True, "webcam": "stopped"}
         self._sync(result)
         return result
+
+    async def _continuous_loop(self):
+        while self.continuous_running:
+            try:
+                await asyncio.to_thread(self._capture_latest)
+            except Exception as e:
+                pass
+            await asyncio.sleep(2.0)  # analyze every 2 seconds
+
+    def _capture_latest(self) -> None:
+        if not self.camera or not self.camera.isOpened():
+            return
+        ok, frame = self.camera.read()
+        if not ok:
+            return
+        path = self.captures / "latest.jpg"
+        cv2.imwrite(str(path), frame)
+        # We only do object detection in the background to save CPU, OCR is on-demand
+        objects = self._objects(frame)
+        faces = self._faces(frame)
+        result = {
+            "ok": True,
+            "path": str(path),
+            "width": int(frame.shape[1]),
+            "height": int(frame.shape[0]),
+            "faces": faces,
+            "objects": objects,
+            "timestamp": time.time()
+        }
+        self._sync(result)
 
     async def capture(self) -> dict[str, Any]:
         return await asyncio.to_thread(self._capture)
@@ -95,7 +192,11 @@ class VisionEngine:
 
     def _screen(self, ocr: bool) -> dict[str, Any]:
         try:
-            image = ImageGrab.grab()
+            with mss.mss() as sct:
+                monitor = sct.monitors[1]  # primary monitor
+                sct_img = sct.grab(monitor)
+                # Convert to PIL Image for Tesseract
+                image = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
             path = self.captures / f"screen_{int(time.time())}.png"
             image.save(path)
             text = self._ocr(image) if ocr else ""
@@ -115,13 +216,21 @@ class VisionEngine:
 
     def _objects(self, frame: Any) -> list[dict[str, Any]]:
         try:
-            model_path = Path(__file__).resolve().parents[2] / "models" / "yolov8n.pt"
-            if not model_path.exists():
+            model_path = self.object_model_path or self._find_object_model()
+            self.object_model_path = model_path
+            if not model_path:
+                self.object_model_error = "YOLO model not found"
                 return []
-            model = YOLO(str(model_path))
-            result = model.predict(frame, verbose=False)[0]
+            if YOLO is None:
+                self.object_model_error = "ultralytics package not installed"
+                return []
+            if self.object_model is None:
+                self.object_model = YOLO(str(model_path))
+            result = self.object_model.predict(frame, verbose=False)[0]
+            self.object_model_error = ""
             return [{"label": result.names[int(box.cls[0])], "confidence": round(float(box.conf[0]), 3)} for box in result.boxes[:20]]
-        except Exception:
+        except Exception as exc:
+            self.object_model_error = str(exc)
             return []
 
     def _ocr(self, image: Any) -> str:
@@ -135,7 +244,16 @@ class VisionEngine:
             return ""
 
     def health(self) -> dict[str, Any]:
-        return {"status": "online", "webcam": "running" if self.camera is not None else "stopped", "last_result": self.last_result}
+        return {
+            "status": "online",
+            "webcam": "running" if self.camera is not None else "stopped",
+            "last_result": self.last_result,
+            "object_detection": {
+                "available": self.object_model_path is not None and YOLO is not None,
+                "model_path": str(self.object_model_path) if self.object_model_path else "",
+                "error": self.object_model_error,
+            },
+        }
 
     def _sync(self, result: dict[str, Any]) -> None:
         self.last_result = result
@@ -321,18 +439,25 @@ class VisionEngine:
         if not ok:
             return {"ok": False, "error": "Webcam frame capture failed."}
         
-        import cv2
-        import base64
-        
-        # Encode frame to JPEG
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+        faces = self._faces(frame)
+        objects = self._objects_throttled(frame)
+        gesture_result = self._detect_gesture(frame) if self.gesture_control_enabled else {"gesture": None, "controls": self.gesture_state}
+
+        self._draw_overlays(frame, faces, objects, gesture_result)
+        frame_base64 = self._encode_frame(frame)
         
         result = {
             "ok": True,
             "frame": frame_base64,
             "width": int(frame.shape[1]),
-            "height": int(frame.shape[0])
+            "height": int(frame.shape[0]),
+            "faces": faces,
+            "objects": objects,
+            "gesture": gesture_result.get("gesture"),
+            "controls": gesture_result.get("controls", self.gesture_state),
+            "gesture_control": self.gesture_control_enabled,
+            "mouse_control": self.mouse_control_enabled,
+            "mouse_state": self.mouse_state,
         }
         
         return result
@@ -481,10 +606,7 @@ class VisionEngine:
         if not ok:
             return {"ok": False, "error": "Webcam frame capture failed."}
         
-        import cv2
-        import base64
-        
-        # Process frame for mouse control
+        gesture_result = {"gesture": None, "action": None}
         if self.mouse_control_enabled:
             gesture_result = self._detect_gesture_for_mouse(frame)
             
@@ -492,18 +614,63 @@ class VisionEngine:
             if gesture_result.get("position", {}).get("detected"):
                 pos = gesture_result["position"]
                 cv2.circle(frame, (int(pos["x"] * frame.shape[1] / 1920), int(pos["y"] * frame.shape[0] / 1080)), 10, (0, 255, 0), -1)
-        
-        # Encode frame to JPEG
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        faces = self._faces(frame)
+        objects = self._objects_throttled(frame)
+        scene_gesture = self._detect_gesture(frame) if self.gesture_control_enabled else {"gesture": None, "controls": self.gesture_state}
+        self._draw_overlays(frame, faces, objects, scene_gesture)
+        frame_base64 = self._encode_frame(frame)
         
         result = {
             "ok": True,
             "frame": frame_base64,
             "width": int(frame.shape[1]),
             "height": int(frame.shape[0]),
+            "faces": faces,
+            "objects": objects,
+            "gesture": scene_gesture.get("gesture") or gesture_result.get("gesture"),
+            "controls": scene_gesture.get("controls", self.gesture_state),
+            "gesture_action": gesture_result.get("action"),
             "mouse_control": self.mouse_control_enabled,
             "mouse_state": self.mouse_state
         }
         
         return result
+
+    def _objects_throttled(self, frame: Any, interval: float = 2.0) -> list[dict[str, Any]]:
+        now = time.time()
+        if now - self.last_object_scan_at < interval:
+            return self.last_objects
+        self.last_objects = self._objects(frame)
+        self.last_object_scan_at = now
+        return self.last_objects
+
+    def _encode_frame(self, frame: Any) -> str:
+        import base64
+        ok, buffer = cv2.imencode(".jpg", frame)
+        if not ok:
+            return ""
+        return base64.b64encode(buffer).decode("utf-8")
+
+    def _draw_overlays(
+        self,
+        frame: Any,
+        faces: list[dict[str, int]],
+        objects: list[dict[str, Any]],
+        gesture_result: dict[str, Any],
+    ) -> None:
+        for face in faces:
+            x, y, w, h = face["x"], face["y"], face["width"], face["height"]
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (6, 182, 212), 2)
+            cv2.putText(frame, "face", (x, max(16, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (6, 182, 212), 1)
+
+        y = 24
+        for obj in objects[:5]:
+            label = str(obj.get("label", "object"))
+            confidence = obj.get("confidence", "")
+            cv2.putText(frame, f"{label} {confidence}", (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 160), 2)
+            y += 22
+
+        gesture = gesture_result.get("gesture") or self.gesture_state.get("last_gesture")
+        if gesture:
+            cv2.putText(frame, f"gesture: {gesture}", (12, frame.shape[0] - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 220, 80), 2)
