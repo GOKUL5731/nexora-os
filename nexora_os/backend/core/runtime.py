@@ -4,6 +4,7 @@ import asyncio
 import logging
 import re
 import time
+import os
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,7 @@ class NexoraRuntime:
         self.monitor = HealthMonitor(self.bus, self.modules, self.agents, self.workflows, self.memory, self.async_runtime)
         self.workflows.node_executor = self._execute_node
         self.brain = CognitiveCore(self.bus, self.memory, self.goals, self.capabilities, self._execute_command, self.llm.status, self.knowledge)
+        self.task_context: dict[str, Any] = {"recent": [], "last_file_path": ""}
         self._register_capabilities()
         self._register_modules()
 
@@ -137,6 +139,21 @@ class NexoraRuntime:
         text = expand_command(text)
         session_id = str(context.get("session_id", "default"))
         language = context.get("language", "en")
+        lowered_for_context = text.lower().strip()
+        if self._asks_recent_work(lowered_for_context):
+            response = self._recent_work_response()
+            self.conversation.add_turn(session_id, "user", text, language)
+            self.conversation.add_turn(session_id, "assistant", str(response.get("message", "")), language)
+            self._remember_task_result(text, response)
+            self._schedule_speech(response, context)
+            return response
+        if self._asks_open_last_file(lowered_for_context):
+            self.conversation.add_turn(session_id, "user", text, language)
+            response = await self._open_last_file()
+            self.conversation.add_turn(session_id, "assistant", str(response.get("message", "")), language)
+            self._remember_task_result(text, response)
+            self._schedule_speech(response, context)
+            return response
         # Record user turn in persistent conversation memory
         self.conversation.add_turn(session_id, "user", text, language)
         # Inject recent conversation context so the brain knows what was said before
@@ -163,6 +180,7 @@ class NexoraRuntime:
             # Record assistant turn
             self.conversation.add_turn(session_id, "assistant", human.message, language)
             self.bus.publish("runtime.response", response, "human_response")
+            self._remember_task_result(text, response)
             self.cognition.self_monitor(text, response, {"session_id": session_id, "mode": response["mode"]})
             self._schedule_speech(response, context)
             return response
@@ -185,11 +203,13 @@ class NexoraRuntime:
                 "latency_ms": human.data.get("latency_ms", 0),
             }
             self.bus.publish("runtime.response", response, "human_response")
+            self._remember_task_result(text, response)
             self.cognition.self_monitor(text, response, {"session_id": session_id, "mode": response["mode"]})
             self._schedule_speech(response, context)
             return response
 
         result = await self._process_with_brain(text, context, session_id)
+        self._remember_task_result(text, result)
         self._schedule_speech(result, context)
         return result
 
@@ -229,6 +249,10 @@ class NexoraRuntime:
     async def _execute_command(self, text: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
         context = context or {}
         lowered = text.lower().strip()
+        if self._asks_recent_work(lowered):
+            return self._recent_work_response()
+        if self._asks_open_last_file(lowered):
+            return await self._open_last_file()
         learn_match = re.match(r"^(learn|study|update your|update|index)\s+(.+?)\.?$", lowered, flags=re.UNICODE)
         if learn_match:
             domain = learn_match.group(2).strip()
@@ -343,6 +367,71 @@ class NexoraRuntime:
             messages = self._chat_messages(context, text)
             result = await asyncio.to_thread(self.llm.chat, messages, system=system)
         return result
+
+    def _remember_task_result(self, text: str, result: dict[str, Any]) -> None:
+        path = str(result.get("path") or "").strip()
+        if path:
+            self.task_context["last_file_path"] = path
+        entry = {
+            "timestamp": time.time(),
+            "input": text,
+            "ok": bool(result.get("ok")),
+            "message": str(result.get("message") or result.get("error") or "")[:500],
+            "path": path,
+        }
+        recent = list(self.task_context.get("recent", []))
+        recent.append(entry)
+        self.task_context["recent"] = recent[-20:]
+        self.bus.set_state("tasks", {"recent": self.task_context["recent"], "last_file_path": self.task_context.get("last_file_path", "")}, "core_runtime")
+
+    def _asks_recent_work(self, lowered: str) -> bool:
+        return any(
+            phrase in lowered
+            for phrase in (
+                "what did we do",
+                "what have we done",
+                "previous tasks",
+                "last tasks",
+                "recent tasks",
+                "what you did",
+                "what did you do",
+            )
+        )
+
+    def _recent_work_response(self) -> dict[str, Any]:
+        recent = list(self.task_context.get("recent", []))[-8:]
+        if not recent:
+            return {"ok": True, "message": "No completed Jarvis tasks are recorded in this runtime session yet.", "tasks": []}
+        lines = []
+        for item in recent:
+            status = "done" if item.get("ok") else "failed"
+            path = f" ({item['path']})" if item.get("path") else ""
+            lines.append(f"- {status}: {item.get('input', '')}{path}")
+        return {"ok": True, "message": "Recent Jarvis tasks:\n" + "\n".join(lines), "tasks": recent}
+
+    def _asks_open_last_file(self, lowered: str) -> bool:
+        if "open" not in lowered:
+            return False
+        return any(phrase in lowered for phrase in ("that file", "created file", "the file", "last file"))
+
+    async def _open_last_file(self) -> dict[str, Any]:
+        path = str(self.task_context.get("last_file_path") or "").strip()
+        if not path:
+            return {"ok": False, "message": "I do not have a previously created file to open in this session."}
+        target = Path(path)
+        if not target.exists():
+            return {"ok": False, "message": f"The previous file no longer exists: {path}", "path": path}
+        try:
+            await asyncio.to_thread(os.startfile, str(target))
+            return {
+                "ok": True,
+                "message": f"Opened the previous file: {target}",
+                "path": str(target),
+                "verification": {"exists": target.exists(), "is_file": target.is_file()},
+                "permission_checked": True,
+            }
+        except Exception as exc:
+            return {"ok": False, "message": f"Failed to open the previous file: {exc}", "path": path}
 
     @staticmethod
     def _chat_messages(context: dict[str, Any], text: str) -> list[dict[str, str]]:

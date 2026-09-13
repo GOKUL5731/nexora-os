@@ -16,6 +16,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BACKEND = "http://127.0.0.1:7474"
 
 
+def post_json(base_url: str, path: str, payload: dict[str, Any], timeout: float = 60.0) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}{path}",
+        data=body,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 @dataclass(slots=True)
 class PetState:
     mode: str = "idle"
@@ -91,7 +102,7 @@ def main() -> int:
             QRadialGradient,
             QTransform,
         )
-        from PySide6.QtWidgets import QApplication, QMenu, QWidget
+        from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QPushButton, QWidget
     except ImportError as exc:
         print("PySide6 is required for the Jarvis Windows pet.")
         print("Run: python -m pip install -r nexora_os\\requirements-desktop.txt")
@@ -112,7 +123,10 @@ def main() -> int:
             self.robot = QPixmap(str(ROOT / "nexora_os" / "assets" / "jarvis_robot_pet.png"))
             self.robot_frames = self._build_robot_frames()
             self.status_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="jarvis-pet-status")
+            self.command_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="jarvis-pet-command")
             self.status_future: concurrent.futures.Future[PetState] | None = None
+            self.command_futures: list[concurrent.futures.Future[dict[str, Any]]] = []
+            self.last_response = ""
             self.setWindowTitle("Jarvis Pet")
             self.setFixedSize(230, 292)
             self.setWindowFlags(
@@ -123,6 +137,7 @@ def main() -> int:
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             self.setMouseTracking(True)
             self.move(int(self.roam_x), int(self.roam_y))
+            self._build_controls()
 
             self.animation_timer = QTimer(self)
             self.animation_timer.timeout.connect(self._tick)
@@ -134,6 +149,53 @@ def main() -> int:
             self.future_timer = QTimer(self)
             self.future_timer.timeout.connect(self._collect_status)
             self.future_timer.start(120)
+            self.command_timer = QTimer(self)
+            self.command_timer.timeout.connect(self._collect_commands)
+            self.command_timer.start(120)
+
+        def _build_controls(self) -> None:
+            self.command_input = QLineEdit(self)
+            self.command_input.setPlaceholderText("Type a command...")
+            self.command_input.setGeometry(16, 238, 126, 38)
+            self.command_input.returnPressed.connect(self._send_typed_command)
+            self.command_input.setStyleSheet(
+                """
+                QLineEdit {
+                    background: rgba(3, 7, 18, 222);
+                    color: #e0f2fe;
+                    border: 1px solid rgba(34, 211, 238, 150);
+                    border-radius: 8px;
+                    padding: 0 10px;
+                    font: 9pt "Segoe UI";
+                }
+                QLineEdit:focus {
+                    border: 1px solid rgba(56, 189, 248, 230);
+                }
+                """
+            )
+            self.send_button = QPushButton("Send", self)
+            self.send_button.setGeometry(146, 238, 42, 38)
+            self.send_button.clicked.connect(self._send_typed_command)
+            self.mic_button = QPushButton("Mic", self)
+            self.mic_button.setGeometry(190, 238, 30, 38)
+            self.mic_button.clicked.connect(self._listen_voice_command)
+            button_style = """
+                QPushButton {
+                    background: rgba(8, 47, 73, 230);
+                    color: #e0f2fe;
+                    border: 1px solid rgba(34, 211, 238, 130);
+                    border-radius: 8px;
+                    font: 8pt "Segoe UI";
+                }
+                QPushButton:hover {
+                    background: rgba(14, 116, 144, 230);
+                }
+                QPushButton:pressed {
+                    background: rgba(6, 78, 96, 240);
+                }
+            """
+            self.send_button.setStyleSheet(button_style)
+            self.mic_button.setStyleSheet(button_style)
 
         def _build_robot_frames(self) -> list[QPixmap]:
             if self.robot.isNull():
@@ -174,6 +236,63 @@ def main() -> int:
                 self.state = PetState(mode="offline", message="Jarvis backend is offline", backend_online=False, last_updated=time.time())
             finally:
                 self.status_future = None
+            self.update()
+
+        def _send_typed_command(self) -> None:
+            command = self.command_input.text().strip()
+            if not command:
+                return
+            self.command_input.clear()
+            self.last_response = f"Running: {command[:38]}"
+            self.state = PetState(mode="thinking", message=self.last_response, backend_online=self.state.backend_online, last_updated=time.time())
+            future = self.command_pool.submit(
+                post_json,
+                args.backend,
+                "/process",
+                {"input": command, "context": {"session_id": "pet", "speak": True}},
+            )
+            self.command_futures.append(future)
+            self.command_futures = self.command_futures[-8:]
+            self.update()
+
+        def _listen_voice_command(self) -> None:
+            self.last_response = "Listening..."
+            self.state = PetState(mode="listening", message="Listening from pet...", backend_online=self.state.backend_online, last_updated=time.time())
+            future = self.command_pool.submit(self._voice_then_process)
+            self.command_futures.append(future)
+            self.command_futures = self.command_futures[-8:]
+            self.update()
+
+        def _voice_then_process(self) -> dict[str, Any]:
+            listened = post_json(args.backend, "/voice/listen?timeout=8", {}, timeout=20)
+            text = str(listened.get("text") or listened.get("message") or "").strip()
+            if not listened.get("ok") or not text:
+                return listened
+            return post_json(
+                args.backend,
+                "/process",
+                {"input": text, "context": {"session_id": "pet", "speak": True, "mode": "voice"}},
+                timeout=60,
+            )
+
+        def _collect_commands(self) -> None:
+            remaining: list[concurrent.futures.Future[dict[str, Any]]] = []
+            for future in self.command_futures:
+                if not future.done():
+                    remaining.append(future)
+                    continue
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = {"ok": False, "message": f"Pet command failed: {exc}"}
+                message = str(result.get("message") or result.get("error") or "Command finished.").strip()
+                self.last_response = message[:120]
+                mode = "idle" if result.get("ok") else "error"
+                self.state = PetState(mode=mode, message=self.last_response, backend_online=True, last_updated=time.time())
+            self.command_futures = remaining
+            if not remaining:
+                self.send_button.setEnabled(True)
+                self.mic_button.setEnabled(True)
             self.update()
 
         def _roam_step(self) -> None:
@@ -314,6 +433,7 @@ $focused = $false
 
         def closeEvent(self, event: Any) -> None:
             self.status_pool.shutdown(wait=False, cancel_futures=True)
+            self.command_pool.shutdown(wait=False, cancel_futures=True)
             event.accept()
 
         def paintEvent(self, event: Any) -> None:
@@ -343,15 +463,6 @@ $focused = $false
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(cx - radius * 1.6, cy - radius * 1.6, radius * 3.2, radius * 3.2))
 
-            shadow_width = 84 + math.sin(self.phase) * 8
-            shadow = QRadialGradient(115, 226, 64)
-            shadow.setColorAt(0.0, QColor(0, 0, 0, 62))
-            shadow.setColorAt(0.75, QColor(0, 0, 0, 20))
-            shadow.setColorAt(1.0, QColor(0, 0, 0, 0))
-            painter.setBrush(shadow)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(QRectF(73 - shadow_width / 2 + 42, 217, shadow_width, 17))
-
             if self.robot_frames:
                 frame_index = int((self.phase / math.tau) * len(self.robot_frames)) % len(self.robot_frames)
                 if self.state.mode == "thinking":
@@ -372,22 +483,14 @@ $focused = $false
                 for i in range(3):
                     painter.drawEllipse(QRectF(44 + i * 64, 30 + math.sin(self.phase + i) * 4, 7, 7))
 
-            panel = QRectF(18, 238, 194, 40)
-            panel_path = QPainterPath()
-            panel_path.addRoundedRect(panel, 8, 8)
-            painter.setBrush(QColor(3, 7, 18, 205))
-            painter.setPen(QPen(QColor(255, 255, 255, 55), 1))
-            painter.drawPath(panel_path)
-
-            painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-            painter.setPen(QColor(240, 249, 255))
-            status = self.state.mode.upper()
-            if self.roam_enabled:
-                status += " / ROAM"
-            painter.drawText(QRectF(24, 242, 182, 14), Qt.AlignmentFlag.AlignCenter, status)
+            painter.setFont(QFont("Segoe UI", 7))
+            painter.setPen(QColor(125, 211, 252))
+            status = self.state.mode.upper() + (" / ROAM" if self.roam_enabled else "")
+            painter.drawText(QRectF(18, 222, 194, 12), Qt.AlignmentFlag.AlignCenter, status)
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(203, 213, 225))
-            painter.drawText(QRectF(24, 257, 182, 14), Qt.AlignmentFlag.AlignCenter, self.state.message[:44])
+            if self.last_response:
+                painter.drawText(QRectF(18, 278, 194, 12), Qt.AlignmentFlag.AlignCenter, self.last_response[:46])
 
     app = QApplication(sys.argv)
     app.setApplicationName("Jarvis Pet")
