@@ -7,7 +7,9 @@ set "APP_DIR=%ROOT%\nexora_os"
 set "VENV_DIR=%ROOT%\.venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "CHECK_ONLY=0"
+set "PET_ARGS="
 if /I "%~1"=="--check" set "CHECK_ONLY=1"
+if /I "%~1"=="--roam" set "PET_ARGS=--roam"
 
 title Jarvis Floating Pet
 
@@ -70,14 +72,15 @@ if errorlevel 1 (
 )
 
 echo [3/3] Launching the pet...
-echo Tip: drag the pet to move it. Right-click for menu. Double-click to open Jarvis.
+echo Tip: drag the pet to move it. Right-click for system menu. Double-click to open Jarvis.
+echo      Use: run_pet.cmd --roam  to let it gently move around the desktop.
 echo.
 
 cd /d "%ROOT%"
 if "%CHECK_ONLY%"=="1" (
   "%VENV_PY%" -m nexora_os.pet_app --smoke-test --screenshot "%ROOT%\logs\jarvis-pet-smoke.png"
 ) else (
-  "%VENV_PY%" -m nexora_os.pet_app
+  "%VENV_PY%" -m nexora_os.pet_app %PET_ARGS%
 )
 set "EXIT_CODE=%ERRORLEVEL%"
 

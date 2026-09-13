@@ -69,13 +69,24 @@ def fetch_status(base_url: str, timeout: float = 0.8) -> PetState:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Jarvis floating Windows pet")
     parser.add_argument("--backend", default=DEFAULT_BACKEND)
+    parser.add_argument("--roam", action="store_true", help="Start with gentle desktop roaming enabled")
     parser.add_argument("--smoke-test", action="store_true", help="Create the pet UI, render one frame, and exit")
     parser.add_argument("--screenshot", type=Path, help="Save a screenshot during smoke test")
     args = parser.parse_args()
 
     try:
-        from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
-        from PySide6.QtGui import QAction, QColor, QFont, QPainter, QPen, QRadialGradient
+        from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, QUrl
+        from PySide6.QtGui import (
+            QAction,
+            QColor,
+            QDesktopServices,
+            QFont,
+            QPainter,
+            QPen,
+            QPixmap,
+            QRadialGradient,
+            QTransform,
+        )
         from PySide6.QtWidgets import QApplication, QMenu, QWidget
     except ImportError as exc:
         print("PySide6 is required for the Jarvis Windows pet.")
@@ -89,8 +100,11 @@ def main() -> int:
             self.state = fetch_status(args.backend)
             self.phase = 0.0
             self.drag_start: QPoint | None = None
+            self.roam_enabled = bool(args.roam)
+            self.roam_velocity = QPoint(1, 0)
+            self.robot = QPixmap(str(ROOT / "nexora_os" / "assets" / "jarvis_robot_pet.png"))
             self.setWindowTitle("Jarvis Pet")
-            self.setFixedSize(190, 210)
+            self.setFixedSize(230, 292)
             self.setWindowFlags(
                 Qt.WindowType.FramelessWindowHint
                 | Qt.WindowType.WindowStaysOnTopHint
@@ -110,11 +124,28 @@ def main() -> int:
 
         def _tick(self) -> None:
             self.phase = (self.phase + 0.055) % (math.tau)
+            if self.roam_enabled and self.drag_start is None:
+                self._roam_step()
             self.update()
 
         def _refresh_status(self) -> None:
             self.state = fetch_status(args.backend)
             self.update()
+
+        def _roam_step(self) -> None:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                return
+            bounds = screen.availableGeometry()
+            speed = 1 if self.state.mode in {"idle", "offline"} else 2
+            wobble = int(math.sin(self.phase * 0.7) * 1)
+            next_pos = self.pos() + QPoint(self.roam_velocity.x() * speed, wobble)
+            if next_pos.x() < bounds.left() or next_pos.x() + self.width() > bounds.right():
+                self.roam_velocity.setX(-self.roam_velocity.x())
+                next_pos.setX(max(bounds.left(), min(next_pos.x(), bounds.right() - self.width())))
+            if next_pos.y() < bounds.top() or next_pos.y() + self.height() > bounds.bottom():
+                next_pos.setY(max(bounds.top(), min(next_pos.y(), bounds.bottom() - self.height())))
+            self.move(next_pos)
 
         def mousePressEvent(self, event: Any) -> None:
             if event.button() == Qt.MouseButton.LeftButton:
@@ -139,7 +170,15 @@ def main() -> int:
         def _show_menu(self, position: QPoint) -> None:
             menu = QMenu(self)
             menu.addAction(QAction("Open Command Center", self, triggered=self._open_command_center))
+            menu.addAction(QAction("Open Project Folder", self, triggered=self._open_project_folder))
+            menu.addAction(QAction("Open Logs", self, triggered=self._open_logs))
             menu.addAction(QAction("Refresh Status", self, triggered=self._refresh_status))
+            roam = QAction("Roam Around Desktop", self)
+            roam.setCheckable(True)
+            roam.setChecked(self.roam_enabled)
+            roam.triggered.connect(self._toggle_roam)
+            menu.addAction(roam)
+            menu.addAction(QAction("Dock Top Right", self, triggered=self._dock_top_right))
             menu.addSeparator()
             menu.addAction(QAction("Quit Pet", self, triggered=QApplication.instance().quit))
             menu.exec(position)
@@ -150,6 +189,25 @@ def main() -> int:
             launcher = ROOT / "run_project.cmd"
             if launcher.exists() and sys.platform == "win32":
                 subprocess.Popen(["cmd", "/c", "start", "", str(launcher)], cwd=str(ROOT))
+
+        def _open_project_folder(self) -> None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(ROOT)))
+
+        def _open_logs(self) -> None:
+            logs = ROOT / "nexora_os" / "logs"
+            logs.mkdir(parents=True, exist_ok=True)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(logs)))
+
+        def _toggle_roam(self) -> None:
+            self.roam_enabled = not self.roam_enabled
+
+        def _dock_top_right(self) -> None:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                return
+            bounds = screen.availableGeometry()
+            self.move(bounds.right() - self.width() - 24, bounds.top() + 24)
+            self.roam_enabled = False
 
         def paintEvent(self, event: Any) -> None:
             painter = QPainter(self)
@@ -165,64 +223,63 @@ def main() -> int:
             }
             c1, c2 = colors.get(self.state.mode, colors["idle"])
 
-            bob = math.sin(self.phase) * 6
-            pulse = 1.0 + (math.sin(self.phase * 2) * 0.035)
-            cx, cy = 95, 86 + bob
-            radius = 54 * pulse
+            bob = math.sin(self.phase) * 7
+            pulse = 1.0 + (math.sin(self.phase * 2) * 0.025)
+            cx, cy = 115, 119 + bob
+            radius = 74 * pulse
 
             glow = QRadialGradient(cx, cy, radius * 1.6)
-            glow.setColorAt(0.0, QColor(c1.red(), c1.green(), c1.blue(), 145))
-            glow.setColorAt(0.55, QColor(c2.red(), c2.green(), c2.blue(), 70))
+            glow.setColorAt(0.0, QColor(c1.red(), c1.green(), c1.blue(), 95))
+            glow.setColorAt(0.55, QColor(c2.red(), c2.green(), c2.blue(), 48))
             glow.setColorAt(1.0, QColor(0, 0, 0, 0))
             painter.setBrush(glow)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(cx - radius * 1.6, cy - radius * 1.6, radius * 3.2, radius * 3.2))
 
-            body = QRadialGradient(cx - 16, cy - 18, radius * 1.25)
-            body.setColorAt(0.0, QColor(255, 255, 255, 235))
-            body.setColorAt(0.28, c1)
-            body.setColorAt(1.0, c2)
-            painter.setBrush(body)
-            painter.setPen(QPen(QColor(255, 255, 255, 180), 2))
-            painter.drawEllipse(QRectF(cx - radius, cy - radius, radius * 2, radius * 2))
-
-            painter.setBrush(QColor(5, 12, 24, 230))
+            shadow_width = 84 + math.sin(self.phase) * 8
+            painter.setBrush(QColor(0, 0, 0, 45))
             painter.setPen(Qt.PenStyle.NoPen)
-            eye_y = cy - 10 + math.sin(self.phase * 1.7) * 2
-            painter.drawEllipse(QRectF(cx - 24, eye_y, 11, 15))
-            painter.drawEllipse(QRectF(cx + 13, eye_y, 11, 15))
+            painter.drawEllipse(QRectF(73 - shadow_width / 2 + 42, 217, shadow_width, 17))
 
-            painter.setPen(QPen(QColor(5, 12, 24, 220), 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            if self.state.mode == "error":
-                painter.drawLine(int(cx - 16), int(cy + 23), int(cx + 16), int(cy + 16))
-            elif self.state.mode == "offline":
-                painter.drawLine(int(cx - 16), int(cy + 20), int(cx + 16), int(cy + 20))
+            if not self.robot.isNull():
+                robot = self.robot.scaled(
+                    160,
+                    210,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                tilt = math.sin(self.phase * 0.75) * (3 if self.state.mode != "thinking" else 6)
+                transform = QTransform().rotate(tilt)
+                robot = robot.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+                x = int((self.width() - robot.width()) / 2 + math.sin(self.phase * 0.55) * 4)
+                y = int(22 + bob)
+                painter.drawPixmap(x, y, robot)
             else:
-                painter.drawArc(QRectF(cx - 20, cy + 8, 40, 24), 200 * 16, 140 * 16)
+                painter.setBrush(c2)
+                painter.setPen(QPen(c1, 3))
+                painter.drawEllipse(QRectF(55, 35 + bob, 120, 120))
 
             painter.setPen(QPen(c1, 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            for i in range(8):
-                angle = self.phase + i * math.tau / 8
-                inner = radius + 10 + math.sin(self.phase * 1.5 + i) * 2
-                outer = inner + 11
-                painter.drawLine(
-                    int(cx + math.cos(angle) * inner),
-                    int(cy + math.sin(angle) * inner),
-                    int(cx + math.cos(angle) * outer),
-                    int(cy + math.sin(angle) * outer),
-                )
+            scan_y = 72 + math.sin(self.phase * 2.2) * 8 + bob
+            painter.drawLine(74, int(scan_y), 156, int(scan_y))
+            if self.state.mode in {"thinking", "listening", "speaking"}:
+                for i in range(3):
+                    painter.drawEllipse(QRectF(44 + i * 64, 30 + math.sin(self.phase + i) * 4, 7, 7))
 
-            panel = QRectF(18, 155, 154, 38)
+            panel = QRectF(18, 238, 194, 40)
             painter.setBrush(QColor(3, 7, 18, 205))
             painter.setPen(QPen(QColor(255, 255, 255, 55), 1))
             painter.drawRoundedRect(panel, 8, 8)
 
             painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
             painter.setPen(QColor(240, 249, 255))
-            painter.drawText(QRectF(24, 159, 142, 14), Qt.AlignmentFlag.AlignCenter, self.state.mode.upper())
+            status = self.state.mode.upper()
+            if self.roam_enabled:
+                status += " / ROAM"
+            painter.drawText(QRectF(24, 242, 182, 14), Qt.AlignmentFlag.AlignCenter, status)
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(203, 213, 225))
-            painter.drawText(QRectF(24, 174, 142, 14), Qt.AlignmentFlag.AlignCenter, self.state.message[:34])
+            painter.drawText(QRectF(24, 257, 182, 14), Qt.AlignmentFlag.AlignCenter, self.state.message[:44])
 
     app = QApplication(sys.argv)
     app.setApplicationName("Jarvis Pet")
@@ -240,6 +297,8 @@ def main() -> int:
                         "ok": True,
                         "mode": pet.state.mode,
                         "backend_online": pet.state.backend_online,
+                        "robot_asset": not pet.robot.isNull(),
+                        "roam_enabled": pet.roam_enabled,
                         "size": [pet.width(), pet.height()],
                     }
                 )
