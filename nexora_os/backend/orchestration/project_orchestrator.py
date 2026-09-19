@@ -11,6 +11,7 @@ from .workspace_manager import WorkspaceManager
 from .conflict_manager import ConflictManager
 from .project_store import ProjectStore
 from .external_session import ExternalAgentSession, SessionState
+from .task_graph import GraphTask, TaskGraph
 from ..computer.app_adapters import CursorAdapter, CodexAdapter, AntigravityAdapter
 
 logger = logging.getLogger("nexora.orchestration.project")
@@ -94,6 +95,7 @@ class ProjectOrchestrator:
             "target_workers": target_workers,
             "worker_workspaces": {},
             "tasks": [],
+            "task_graph": {},
             "sessions": {},
             "conflict_report": None,
             "created_at": datetime.utcnow().isoformat()
@@ -128,6 +130,8 @@ class ProjectOrchestrator:
                 "status": "PENDING",
                 "description": f"Assigned chunk {i+1} for {worker}"
             }
+            graph_task = GraphTask(task_id, task["description"], task["description"], worker.lower())
+            project["task_graph"][task_id] = vars(graph_task).copy()
             session = ExternalAgentSession(worker.lower(), project_id, task_id, worker_ws["id"])
             task["session_id"] = session.session_id
             project["sessions"][session.session_id] = session.to_dict()

@@ -3,6 +3,7 @@ from .workspace_manager import WorkspaceManager
 from .conflict_manager import ConflictManager
 from .project_store import ProjectStore
 from .external_session import ExternalAgentSession, SessionState
+from .task_graph import GraphTask, TaskGraph
 
 __all__ = [
     "ProjectOrchestrator",
@@ -11,4 +12,6 @@ __all__ = [
     "ProjectStore",
     "ExternalAgentSession",
     "SessionState",
+    "GraphTask",
+    "TaskGraph",
 ]
