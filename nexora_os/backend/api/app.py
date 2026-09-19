@@ -260,6 +260,11 @@ async def knowledge_search(q: str, domain: str = "", limit: int = 8) -> dict[str
     return {"items": runtime.knowledge.search(q, domain, limit)}
 
 
+@app.get("/knowledge/graph")
+async def knowledge_graph(node: str = "", limit: int = 200) -> dict[str, Any]:
+    return runtime.knowledge.graph(node, limit)
+
+
 @app.post("/knowledge/index")
 async def knowledge_index(request: KnowledgeIndexRequest) -> dict[str, Any]:
     return runtime.knowledge.index_text(request.domain, request.title, request.content, request.source, request.tags)
