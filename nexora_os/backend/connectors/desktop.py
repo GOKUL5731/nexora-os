@@ -102,6 +102,7 @@ class DesktopConnector:
             "wait_for_window",
             "list_apps",
             "list_windows",
+            "list_monitors",
             "inspect",
             "focus_window",
             "close_app",
@@ -140,6 +141,8 @@ class DesktopConnector:
                 result = self.list_apps()
             elif action in {"list_windows", "windows"}:
                 result = self.list_windows()
+            elif action in {"list_monitors", "monitors"}:
+                result = self.list_monitors()
             elif action == "inspect":
                 result = self.inspect(str(params.get("app_name") or params.get("query") or ""))
             elif action == "focus_window":
@@ -302,6 +305,31 @@ class DesktopConnector:
     def list_windows(self) -> dict[str, Any]:
         windows = self._windows()
         return {"ok": True, "windows": windows, "count": len(windows)}
+
+    def list_monitors(self) -> dict[str, Any]:
+        """Return the real Windows monitor topology, including negative bounds."""
+        if self._platform != "win32":
+            return {"ok": False, "status": STATUS_DEGRADED, "monitors": [], "error": "windows_only"}
+        script = """
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
+  [pscustomobject]@{
+    id = $_.DeviceName; primary = [bool]$_.Primary
+    x = $_.Bounds.X; y = $_.Bounds.Y; width = $_.Bounds.Width; height = $_.Bounds.Height
+    work_x = $_.WorkingArea.X; work_y = $_.WorkingArea.Y
+    work_width = $_.WorkingArea.Width; work_height = $_.WorkingArea.Height
+  }
+} | ConvertTo-Json -Compress -Depth 3
+"""
+        try:
+            completed = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True, timeout=10)
+            if completed.returncode != 0 or not completed.stdout.strip():
+                return {"ok": False, "status": STATUS_FAILED, "monitors": [], "error": completed.stderr.strip() or "monitor_query_failed"}
+            payload = json.loads(completed.stdout)
+            monitors = payload if isinstance(payload, list) else [payload]
+            return {"ok": True, "status": STATUS_AVAILABLE, "monitors": monitors, "count": len(monitors)}
+        except Exception as exc:
+            return {"ok": False, "status": STATUS_FAILED, "monitors": [], "error": str(exc)}
 
     def inspect(self, query: str) -> dict[str, Any]:
         resolved = self.resolve(query)
@@ -569,9 +597,15 @@ public class Win32Enum {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
   [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 '@
 Add-Type $sig -ErrorAction SilentlyContinue
+Add-Type -AssemblyName System.Windows.Forms
 $items = New-Object System.Collections.Generic.List[object]
 [Win32Enum]::EnumWindows({
   param($hWnd, $lParam)
@@ -583,8 +617,17 @@ $items = New-Object System.Collections.Generic.List[object]
       $procId = 0
       [void][Win32Enum]::GetWindowThreadProcessId($hWnd, [ref]$procId)
       $procName = ""
-      try { $procName = (Get-Process -Id $procId -ErrorAction Stop).ProcessName + ".exe" } catch {}
-      $items.Add([pscustomobject]@{ handle = $hWnd.ToInt64(); pid = $procId; process_name = $procName; title = $title }) | Out-Null
+      $exe = ""
+      try { $proc = Get-Process -Id $procId -ErrorAction Stop; $procName = $proc.ProcessName + ".exe"; $exe = $proc.Path } catch {}
+      $rect = New-Object Win32Enum+RECT
+      [void][Win32Enum]::GetWindowRect($hWnd, [ref]$rect)
+      $screen = [System.Windows.Forms.Screen]::FromHandle($hWnd)
+      $items.Add([pscustomobject]@{
+        handle = $hWnd.ToInt64(); pid = $procId; process_name = $procName; executable = $exe; title = $title;
+        x = $rect.Left; y = $rect.Top; width = ($rect.Right - $rect.Left); height = ($rect.Bottom - $rect.Top);
+        visible = $true; minimized = [Win32Enum]::IsIconic($hWnd); maximized = [Win32Enum]::IsZoomed($hWnd);
+        focused = ($hWnd -eq [Win32Enum]::GetForegroundWindow()); monitor_id = $screen.DeviceName
+      }) | Out-Null
     }
   }
   return $true
