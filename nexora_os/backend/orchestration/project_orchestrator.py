@@ -10,6 +10,7 @@ from ..core.event_bus import EventBus
 from .workspace_manager import WorkspaceManager
 from .conflict_manager import ConflictManager
 from .project_store import ProjectStore
+from .external_session import ExternalAgentSession, SessionState
 from ..computer.app_adapters import CursorAdapter, CodexAdapter, AntigravityAdapter
 
 logger = logging.getLogger("nexora.orchestration.project")
@@ -93,6 +94,7 @@ class ProjectOrchestrator:
             "target_workers": target_workers,
             "worker_workspaces": {},
             "tasks": [],
+            "sessions": {},
             "conflict_report": None,
             "created_at": datetime.utcnow().isoformat()
         }
@@ -126,30 +128,45 @@ class ProjectOrchestrator:
                 "status": "PENDING",
                 "description": f"Assigned chunk {i+1} for {worker}"
             }
+            session = ExternalAgentSession(worker.lower(), project_id, task_id, worker_ws["id"])
+            task["session_id"] = session.session_id
+            project["sessions"][session.session_id] = session.to_dict()
             project["tasks"].append(task)
             
             adapter = self.adapters.get(worker.lower())
             if adapter:
                 health = adapter.discover()
                 if health.get("installed"):
+                    session.transition(SessionState.LAUNCHING)
                     launch_result = await adapter.launch(worker_ws["sandbox_path"])
                     if launch_result.get("ok", False):
+                        session.transition(SessionState.READY)
                         task["status"] = "STARTED"
                         task["launch_evidence"] = launch_result
                         prompt_result = await adapter.send_prompt(task["description"])
+                        session.transition(SessionState.PROMPTING)
+                        session.record_prompt(task["description"], "ACCEPTED" if prompt_result.get("ok") else "REJECTED", prompt_result)
                         task["prompt_evidence"] = prompt_result
                         if not prompt_result.get("ok", False):
                             task["status"] = "FAILED"
                             task["failure"] = "Application rejected prompt"
+                            session.transition(SessionState.FAILED, task["failure"])
+                        else:
+                            session.transition(SessionState.WORKING)
                     else:
                         task["status"] = "WAITING"
                         task["waiting_reason"] = "Application launch was not verified"
+                        session.transition(SessionState.WAITING, task["waiting_reason"])
                 else:
                     task["status"] = "WAITING"
                     task["waiting_reason"] = "Application is unavailable"
+                    session.transition(SessionState.WAITING, task["waiting_reason"])
             else:
                 task["status"] = "WAITING"
                 task["waiting_reason"] = "No adapter registered"
+                session.transition(SessionState.WAITING, task["waiting_reason"])
+
+            project["sessions"][session.session_id] = session.to_dict()
 
             self.bus.publish("orchestrator.task_assigned", task, "orchestrator")
             self._persist(project_id)
