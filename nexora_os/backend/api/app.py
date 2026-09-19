@@ -128,6 +128,13 @@ class KnowledgeIndexRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class LearningJobRequest(BaseModel):
+    domain: str
+    goal: str = ""
+    resources: list[dict[str, Any]] = Field(default_factory=list)
+    expected_terms: list[str] = Field(default_factory=list)
+
+
 class PerceptionRequest(BaseModel):
     type: str = "text"
     content: str = ""
@@ -294,6 +301,27 @@ async def knowledge_graph(node: str = "", limit: int = 200) -> dict[str, Any]:
 @app.post("/knowledge/index")
 async def knowledge_index(request: KnowledgeIndexRequest) -> dict[str, Any]:
     return runtime.knowledge.index_text(request.domain, request.title, request.content, request.source, request.tags)
+
+
+@app.get("/learning/jobs")
+async def learning_jobs(limit: int = 20) -> dict[str, Any]:
+    return {"status": runtime.learning.status(), "jobs": runtime.learning.list_jobs(limit)}
+
+
+@app.post("/learning/jobs")
+async def learning_job_start(request: LearningJobRequest) -> dict[str, Any]:
+    result = runtime.learning.start_job(request.domain, request.goal, request.resources, request.expected_terms)
+    if result.get("error") == "domain_required":
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
+@app.get("/learning/jobs/{job_id}")
+async def learning_job_get(job_id: int) -> dict[str, Any]:
+    job = runtime.learning.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Learning job not found")
+    return job
 
 
 # ─── Conversation Memory Routes ──────────────────────────────────────────────

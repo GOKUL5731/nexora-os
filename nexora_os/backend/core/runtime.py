@@ -22,6 +22,7 @@ from ..vision.engine import VisionEngine
 from ..voice.engine import VoiceEngine
 from ..workflows.engine import WorkflowEngine
 from ..knowledge import KnowledgeManager
+from ..learning import LearningManager
 from ..brain import CapabilityRegistry, CognitiveCore, GoalManager
 from ..companion import CompanionManager
 from ..security import SecurityManager
@@ -71,6 +72,7 @@ class NexoraRuntime:
         self.memory = MemoryEngine(root / "databases" / "memory.db", self.bus, llm=self.llm)
         self.conversation = ConversationMemory(root / "databases" / "conversation.db", self.bus)
         self.knowledge = KnowledgeManager(root / "databases" / "knowledge.db", self.memory, self.bus, llm=self.llm)
+        self.learning = LearningManager(root / "databases" / "learning.db", self.bus, self.knowledge, self.memory)
         self.voice = VoiceEngine(self.bus)
         self.vision = VisionEngine(root / "logs" / "captures", self.bus)
         self.cognition = CognitiveIntelligenceEngine(root, self.bus, self.memory, self.knowledge, self.voice, self.vision)
