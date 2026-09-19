@@ -105,6 +105,11 @@ class DesktopConnector:
             "list_monitors",
             "inspect",
             "focus_window",
+            "move_window",
+            "resize_window",
+            "restore_window",
+            "minimize_window",
+            "maximize_window",
             "close_app",
             "system_info",
             "lock_screen",
@@ -149,6 +154,17 @@ class DesktopConnector:
                 result = self.focus_window(
                     title_contains=str(params.get("title_contains") or ""),
                     process_name=str(params.get("process_name") or ""),
+                )
+            elif action in {"move_window", "resize_window", "restore_window", "minimize_window", "maximize_window"}:
+                result = self.control_window(
+                    action,
+                    handle=int(params["handle"]) if params.get("handle") else None,
+                    title_contains=str(params.get("title_contains") or ""),
+                    process_name=str(params.get("process_name") or ""),
+                    x=int(params["x"]) if params.get("x") is not None else None,
+                    y=int(params["y"]) if params.get("y") is not None else None,
+                    width=int(params["width"]) if params.get("width") is not None else None,
+                    height=int(params["height"]) if params.get("height") is not None else None,
                 )
             elif action == "close_app":
                 result = self.close_app(
@@ -373,12 +389,42 @@ Add-Type -AssemblyName System.Windows.Forms
             text=True,
             timeout=5,
         )
-        return {
-            "ok": completed.returncode == 0,
-            "window": window["window"],
-            "verification": {"focused_request_returncode": completed.returncode},
-            "error": completed.stderr.strip() if completed.returncode else "",
-        }
+        observed = next((item for item in self._windows() if int(item.get("handle", -1)) == hwnd), {})
+        verified = bool(observed.get("focused"))
+        return {"ok": completed.returncode == 0 and verified, "window": observed or window["window"], "verification": {"focused": verified, "request_returncode": completed.returncode}, "error": "focus_not_verified" if completed.returncode == 0 and not verified else (completed.stderr.strip() if completed.returncode else "")}
+
+    def control_window(self, action: str, handle: int | None = None, title_contains: str = "", process_name: str = "", x: int | None = None, y: int | None = None, width: int | None = None, height: int | None = None) -> dict[str, Any]:
+        if self._platform != "win32":
+            return {"ok": False, "error": "window_control is currently implemented only for Windows"}
+        if handle is None:
+            found = self.wait_for_window(title_contains=title_contains, process_name=process_name, timeout=0.2)
+            if not found.get("ok"):
+                return {"ok": False, "error": "No matching window found", "observation": found}
+            handle = int(found["window"]["handle"])
+        commands = {"restore_window": 9, "minimize_window": 6, "maximize_window": 3}
+        if action in commands:
+            script = f"Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);' -Name Win32Show -Namespace Native; [Native.Win32Show]::ShowWindow([IntPtr]{handle}, {commands[action]}) | Out-Null"
+        else:
+            if x is None or y is None:
+                return {"ok": False, "error": "move_window requires x and y"}
+            width = width if width is not None else 0
+            height = height if height is not None else 0
+            script = f"Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);' -Name Win32Pos -Namespace Native; [Native.Win32Pos]::SetWindowPos([IntPtr]{handle}, [IntPtr]::Zero, {x}, {y}, {width}, {height}, 0x0040) | Out-Null"
+        completed = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True, timeout=5)
+        observed = next((item for item in self._windows() if int(item.get("handle", -1)) == handle), {})
+        if not observed:
+            return {"ok": False, "error": "window_disappeared_after_control", "request_returncode": completed.returncode}
+        if action == "move_window":
+            verified = observed.get("x") == x and observed.get("y") == y
+        elif action == "resize_window":
+            verified = observed.get("width") == width and observed.get("height") == height
+        elif action == "minimize_window":
+            verified = bool(observed.get("minimized"))
+        elif action == "maximize_window":
+            verified = bool(observed.get("maximized"))
+        else:
+            verified = not bool(observed.get("minimized"))
+        return {"ok": completed.returncode == 0 and verified, "window": observed, "verification": {"verified": verified, "request_returncode": completed.returncode}, "error": "window_control_not_verified" if not verified else ""}
 
     def close_app(self, pid: int | None = None, app_name: str = "") -> dict[str, Any]:
         targets: list[dict[str, Any]] = []
