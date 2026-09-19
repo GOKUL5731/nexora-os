@@ -194,6 +194,8 @@ class ProjectOrchestrator:
         for pid, project in self.active_projects.items():
             if project["status"] not in ("EXECUTING", "WAITING"):
                 continue
+
+            await self._observe_project(pid, project)
                 
             all_done = True
             for task in project["tasks"]:
@@ -222,6 +224,33 @@ class ProjectOrchestrator:
                     "has_conflicts": conflict_report["has_conflicts"],
                     "conflict_report": conflict_report
                 }, "orchestrator")
+
+    async def _observe_project(self, project_id: str, project: dict[str, Any]) -> None:
+        """Reconcile external process state and real workspace changes.
+
+        Observation is deliberately conservative: a stopped process or rejected
+        prompt is evidence of disconnection/failure, never evidence of success.
+        """
+        for task in project.get("tasks", []):
+            session_id = task.get("session_id")
+            session_data = project.get("sessions", {}).get(session_id)
+            if not session_data:
+                continue
+            adapter = self.adapters.get(str(task.get("worker_application", "")).lower())
+            if adapter and session_data.get("state") in {SessionState.WORKING.value, SessionState.READY.value}:
+                observation = await adapter.observe_output()
+                session_data["last_observation"] = observation
+                session_data["updated_at"] = datetime.utcnow().timestamp()
+                if observation.get("state") == "STOPPED" and session_data.get("state") == SessionState.WORKING.value:
+                    session_data["state"] = SessionState.DISCONNECTED.value
+                    session_data["blocker"] = "External application process is no longer running"
+                    task["status"] = "WAITING"
+                    task["waiting_reason"] = session_data["blocker"]
+                    self.bus.publish("agent.disconnected", {"project_id": project_id, "task_id": task["id"], "session_id": session_id}, "orchestrator")
+            diff = await self.workspace_manager.get_workspace_diff(task.get("workspace_id", ""))
+            session_data["files_changed"] = diff.get("modified_files", [])
+            task["files_changed"] = diff.get("modified_files", [])
+        self._persist(project_id)
 
     async def _handle_task_created(self, event: dict[str, Any]) -> None:
         pass
