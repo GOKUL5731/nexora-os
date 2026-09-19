@@ -68,6 +68,9 @@ class ProjectOrchestrator:
             projects.append(item)
         return {"projects": projects, "count": len(projects)}
 
+    def adapter_status(self) -> dict[str, Any]:
+        return {name: adapter.discover() for name, adapter in self.adapters.items()}
+
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         project = self.active_projects.get(project_id)
         if not project:

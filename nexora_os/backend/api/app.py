@@ -187,6 +187,11 @@ async def orchestration_projects() -> dict[str, Any]:
     return runtime.orchestrator.snapshot()
 
 
+@app.get("/orchestration/adapters")
+async def orchestration_adapters() -> dict[str, Any]:
+    return {"adapters": runtime.orchestrator.adapter_status()}
+
+
 @app.get("/orchestration/projects/{project_id}")
 async def orchestration_project(project_id: str) -> dict[str, Any]:
     project = runtime.orchestrator.get_project(project_id)

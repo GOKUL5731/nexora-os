@@ -41,6 +41,8 @@ Double-click `run_project.cmd` for the Windows one-click path. Use `run_project.
 | Voice | Existing voice pipeline | Existing focused tests | Hardware acceptance not run | ENVIRONMENT-DEPENDENT |
 | Vision | Existing vision pipeline | Existing focused tests | Camera/model acceptance not run | ENVIRONMENT-DEPENDENT |
 
+Live adapter diagnostics on 2026-09-19 reported Cursor and Codex processes running and launch commands discoverable, but `send_prompt`, response observation, waiting detection, and completion detection are explicitly `false`. Antigravity was not detected. This is detection evidence only; it is not a live multi-agent success claim.
+
 ## Live Windows evidence
 
 Command executed from the repository:
