@@ -9,6 +9,7 @@ from backend.computer.app_adapters.cursor import CursorAdapter
 def test_adapter_does_not_claim_missing_application_is_installed(monkeypatch, adapter_type):
     monkeypatch.setattr("shutil.which", lambda _: None)
     adapter = adapter_type()
+    monkeypatch.setattr(adapter, "_running", lambda: [])
     result = adapter.discover()
     assert result["installed"] is False
     assert result["running"] is False
