@@ -43,6 +43,15 @@ Double-click `run_project.cmd` for the Windows one-click path. Use `run_project.
 
 Live adapter diagnostics on 2026-09-19 reported Cursor and Codex processes running and launch commands discoverable, but `send_prompt`, response observation, waiting detection, and completion detection are explicitly `false`. Antigravity was not detected. This is detection evidence only; it is not a live multi-agent success claim.
 
+## Controlled Codex live demonstration
+
+- Workspace: isolated temporary Git repository under the Windows temp directory.
+- Prompt: non-destructive connectivity check explicitly forbidding file changes.
+- Delivery: `codex exec` accepted the prompt and returned a verified child PID.
+- Observation: JSONL output was captured; final state was `COMPLETED` with exit code `0`.
+- Result: Codex returned `READY`; no files were created, modified, or deleted.
+- Configuration warnings: the user Codex profile contains two ignored deprecated settings; they did not prevent this run.
+
 ## Live Windows evidence
 
 Command executed from the repository:
