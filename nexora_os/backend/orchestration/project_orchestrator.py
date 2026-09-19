@@ -9,6 +9,7 @@ from datetime import datetime
 from ..core.event_bus import EventBus
 from .workspace_manager import WorkspaceManager
 from .conflict_manager import ConflictManager
+from .project_store import ProjectStore
 from ..computer.app_adapters import CursorAdapter, CodexAdapter, AntigravityAdapter
 
 logger = logging.getLogger("nexora.orchestration.project")
@@ -18,11 +19,12 @@ class ProjectOrchestrator:
     Central supervisor for coordinating multiple autonomous workers (Codex, Cursor, Antigravity)
     on a shared workspace with safe Git worktree isolation and conflict management.
     """
-    def __init__(self, bus: EventBus, workspace_manager: WorkspaceManager):
+    def __init__(self, bus: EventBus, workspace_manager: WorkspaceManager, store: ProjectStore | None = None):
         self.bus = bus
         self.workspace_manager = workspace_manager
         self.conflict_manager = ConflictManager()
         self.active_projects: dict[str, dict[str, Any]] = {}
+        self.store = store
         self._loop_task: asyncio.Task | None = None
         
         self.adapters = {
@@ -32,6 +34,16 @@ class ProjectOrchestrator:
         }
         
         self.bus.subscribe("task.created", self._handle_task_created)
+        if self.store:
+            for project in self.store.load_all():
+                # External processes and windows cannot be assumed alive after a restart.
+                for task in project.get("tasks", []):
+                    if task.get("status") in {"STARTED", "PENDING"}:
+                        task["status"] = "WAITING"
+                        task["waiting_reason"] = "Recovered after G restart; external session must be rediscovered"
+                if project.get("status") in {"PLANNING", "EXECUTING"}:
+                    project["status"] = "WAITING"
+                self.active_projects[project["project_id"]] = project
 
     async def start(self) -> None:
         self._loop_task = asyncio.create_task(self._orchestration_loop())
@@ -62,6 +74,10 @@ class ProjectOrchestrator:
         item["tasks"] = [dict(task) for task in project.get("tasks", [])]
         return item
 
+    def _persist(self, project_id: str) -> None:
+        if self.store and project_id in self.active_projects:
+            self.store.save(self.active_projects[project_id])
+
     async def start_project(self, project_name: str, root_path: str, goal: str, target_workers: list[str]) -> str:
         """Starts a new multi-agent orchestrated project."""
         project_id = str(uuid.uuid4())
@@ -80,6 +96,7 @@ class ProjectOrchestrator:
             "conflict_report": None,
             "created_at": datetime.utcnow().isoformat()
         }
+        self._persist(project_id)
         
         self.bus.publish("orchestrator.project_started", {"project_id": project_id, "name": project_name}, "orchestrator")
         await self._decompose_and_assign(project_id)
@@ -135,6 +152,7 @@ class ProjectOrchestrator:
                 task["waiting_reason"] = "No adapter registered"
 
             self.bus.publish("orchestrator.task_assigned", task, "orchestrator")
+            self._persist(project_id)
 
         project["status"] = "EXECUTING" if any(
             task["status"] == "STARTED" for task in project["tasks"]
@@ -144,6 +162,7 @@ class ProjectOrchestrator:
             "status": project["status"],
             "tasks": project["tasks"],
         }, "orchestrator")
+        self._persist(project_id)
 
     async def _orchestration_loop(self) -> None:
         """Background loop to monitor worker progress and re-prompt if stalled."""
@@ -180,6 +199,7 @@ class ProjectOrchestrator:
                 project["conflict_report"] = conflict_report
 
                 project["status"] = "COMPLETED" if not conflict_report["has_conflicts"] else "NEEDS_RESOLUTION"
+                self._persist(pid)
                 self.bus.publish("orchestrator.project_completed", {
                     "project_id": pid,
                     "has_conflicts": conflict_report["has_conflicts"],

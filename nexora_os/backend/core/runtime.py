@@ -25,7 +25,9 @@ from ..knowledge import KnowledgeManager
 from ..brain import CapabilityRegistry, CognitiveCore, GoalManager
 from ..companion import CompanionManager
 from ..security import SecurityManager
-from ..connectors import ConnectorManager, DesktopConnector, BrowserConnector, TerminalConnector, FilesystemConnector, AndroidConnector, VSCodeConnector
+from ..mcp import MCPManager
+from ..orchestration import ProjectOrchestrator, ProjectStore, WorkspaceManager
+from ..connectors import ConnectorManager, DesktopConnector, BrowserConnector, TerminalConnector, FilesystemConnector, AndroidConnector, VSCodeConnector, WebConnector
 from .event_bus import EventBus
 from .cognitive_intelligence import CognitiveIntelligenceEngine
 from .human_response import HumanResponseEngine
@@ -85,6 +87,14 @@ class NexoraRuntime:
         )
         self.companion = CompanionManager(root / "databases" / "companion.db", self.bus, self.memory)
         self.security = SecurityManager(root / "databases" / "security.db", self.bus)
+        self.mcp = MCPManager(self.bus)
+        self.workspace_manager = WorkspaceManager(root / "workspaces")
+        self.orchestrator = ProjectOrchestrator(
+            self.bus,
+            self.workspace_manager,
+            ProjectStore(root / "databases" / "orchestration.db"),
+        )
+        
         self.connector_manager = ConnectorManager()
         self.connector_manager.register("desktop",    DesktopConnector())
         self.connector_manager.register("browser",    BrowserConnector())
@@ -92,6 +102,7 @@ class NexoraRuntime:
         self.connector_manager.register("filesystem", FilesystemConnector(root_path=str(root)))
         self.connector_manager.register("android",    AndroidConnector())
         self.connector_manager.register("vscode",     VSCodeConnector())
+        self.connector_manager.register("web",        WebConnector())
         # Wire connector_manager into AutomationEngine now that all connectors are registered
         self.automation._connectors = self.connector_manager
         # Connector registry — read-only capability manifest
@@ -108,6 +119,8 @@ class NexoraRuntime:
         self.bus.subscribe("voice.activity", self._on_voice_activity)
 
     async def start(self) -> None:
+        await self.mcp.start()
+        await self.orchestrator.start()
         await global_scheduler.start()  # Keep for backwards compatibility with automation
         await self.startup_manager.execute_boot_sequence(self)
         if self._config_bool("voice_continuous_listen", False):
@@ -118,6 +131,8 @@ class NexoraRuntime:
 
     async def shutdown(self) -> None:
         self.log.info("NEXORA runtime shutdown requested")
+        await self.orchestrator.stop()
+        await self.mcp.stop()
         self.voice.stop_continuous()
         await self.vision.stop()
         await global_scheduler.stop()  # Keep for backwards compatibility
