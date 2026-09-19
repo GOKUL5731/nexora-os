@@ -191,6 +191,7 @@ export const nexoraApi = {
   nodeTypes: () => request<{ node_types: string[] }>("/platform/node-types"),
 
   connectors: () => request<{ connectors: Array<{ name: string; health: string; capabilities: string[] }>; available: number }>("/connectors"),
+  orchestrationProjects: () => request<{ projects: OrchestrationProject[]; count: number }>("/orchestration/projects"),
   connectorExecute: (name: string, action: string, params: Record<string, unknown> = {}) =>
     request<Record<string, unknown>>(`/connectors/${encodeURIComponent(name)}/execute`, {
       method: "POST",
@@ -251,6 +252,25 @@ export type CognitionStatus = {
   };
   memory_count?: number;
   knowledge?: { domains?: number; entries?: number };
+};
+export type OrchestrationTask = {
+  id: string;
+  worker_application: string;
+  status: string;
+  description: string;
+  workspace_id?: string;
+  waiting_reason?: string;
+  failure?: string;
+};
+export type OrchestrationProject = {
+  project_id: string;
+  name: string;
+  goal: string;
+  status: string;
+  root_path: string;
+  tasks: OrchestrationTask[];
+  target_workers: string[];
+  conflict_report?: Record<string, unknown> | null;
 };
 export type NetworkNode = { id: string; label: string; type?: string };
 export type NetworkEdge = { source: string; target: string };

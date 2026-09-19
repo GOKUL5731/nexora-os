@@ -117,6 +117,13 @@ class LiveKitTokenRequest(BaseModel):
     ttl_seconds: int = 3600
 
 
+class OrchestrationRequest(BaseModel):
+    project_name: str
+    root_path: str
+    goal: str
+    target_workers: list[str] = Field(default_factory=lambda: ["codex", "cursor", "antigravity"])
+
+
 @app.on_event("startup")
 async def startup() -> None:
     await runtime.start()
@@ -169,6 +176,32 @@ async def brain_status() -> dict[str, Any]:
 @app.get("/cognition/status")
 async def cognition_status() -> dict[str, Any]:
     return runtime.cognition.status()
+
+
+@app.get("/orchestration/projects")
+async def orchestration_projects() -> dict[str, Any]:
+    return runtime.orchestrator.snapshot()
+
+
+@app.get("/orchestration/projects/{project_id}")
+async def orchestration_project(project_id: str) -> dict[str, Any]:
+    project = runtime.orchestrator.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.post("/orchestration/projects")
+async def orchestration_start(request: OrchestrationRequest) -> dict[str, Any]:
+    if not request.target_workers:
+        raise HTTPException(status_code=422, detail="At least one target worker is required")
+    project_id = await runtime.orchestrator.start_project(
+        request.project_name,
+        request.root_path,
+        request.goal,
+        request.target_workers,
+    )
+    return runtime.orchestrator.get_project(project_id) or {"project_id": project_id}
 
 
 @app.post("/cognition/perceive")

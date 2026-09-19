@@ -45,6 +45,23 @@ class ProjectOrchestrator:
             except asyncio.CancelledError:
                 pass
 
+    def snapshot(self) -> dict[str, Any]:
+        """Return serializable canonical project state for API/UI consumers."""
+        projects = []
+        for project in self.active_projects.values():
+            item = dict(project)
+            item["tasks"] = [dict(task) for task in project.get("tasks", [])]
+            projects.append(item)
+        return {"projects": projects, "count": len(projects)}
+
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
+        project = self.active_projects.get(project_id)
+        if not project:
+            return None
+        item = dict(project)
+        item["tasks"] = [dict(task) for task in project.get("tasks", [])]
+        return item
+
     async def start_project(self, project_name: str, root_path: str, goal: str, target_workers: list[str]) -> str:
         """Starts a new multi-agent orchestrated project."""
         project_id = str(uuid.uuid4())
@@ -119,7 +136,14 @@ class ProjectOrchestrator:
 
             self.bus.publish("orchestrator.task_assigned", task, "orchestrator")
 
-        project["status"] = "EXECUTING"
+        project["status"] = "EXECUTING" if any(
+            task["status"] == "STARTED" for task in project["tasks"]
+        ) else "WAITING"
+        self.bus.publish("orchestrator.project_state_changed", {
+            "project_id": project_id,
+            "status": project["status"],
+            "tasks": project["tasks"],
+        }, "orchestrator")
 
     async def _orchestration_loop(self) -> None:
         """Background loop to monitor worker progress and re-prompt if stalled."""
@@ -132,15 +156,15 @@ class ProjectOrchestrator:
 
     async def _check_progress(self) -> None:
         for pid, project in self.active_projects.items():
-            if project["status"] != "EXECUTING":
+            if project["status"] not in ("EXECUTING", "WAITING"):
                 continue
                 
             all_done = True
             for task in project["tasks"]:
-                if task["status"] not in ("COMPLETED", "FAILED"):
+                if task["status"] not in ("COMPLETED", "FAILED", "WAITING"):
                     all_done = False
                 
-            if all_done:
+            if all_done and any(task["status"] in ("COMPLETED", "FAILED") for task in project["tasks"]):
                 project["status"] = "VERIFYING"
                 self.bus.publish("orchestrator.project_verifying", {"project_id": pid}, "orchestrator")
                 
