@@ -68,6 +68,32 @@ class MemoryRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class EpisodeRequest(BaseModel):
+    goal: str
+    action: str
+    result: str
+    outcome: str = "observed"
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float = 0.7
+    importance: float = 0.5
+    tags: list[str] = Field(default_factory=list)
+
+
+class ProcedureRequest(BaseModel):
+    name: str
+    description: str
+    steps: list[str]
+    validators: list[str] = Field(default_factory=list)
+    source_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float = 0.6
+    tags: list[str] = Field(default_factory=list)
+
+
+class ProcedureScoreRequest(BaseModel):
+    succeeded: bool
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
 class GraphRequest(BaseModel):
     name: str
     description: str = ""
@@ -469,6 +495,53 @@ async def memory_network() -> dict[str, Any]:
 @app.post("/memory/reflect")
 async def memory_reflect(query: str = "") -> dict[str, Any]:
     return runtime.memory.reflect(query)
+
+
+@app.post("/memory/episodes")
+async def memory_episode_store(request: EpisodeRequest) -> dict[str, Any]:
+    return runtime.memory.record_episode(
+        request.goal,
+        request.action,
+        request.result,
+        request.outcome,
+        request.evidence,
+        request.confidence,
+        request.importance,
+        request.tags,
+    )
+
+
+@app.get("/memory/episodes")
+async def memory_episodes(query: str = "", outcome: str = "", limit: int = 20) -> dict[str, Any]:
+    return {"episodes": runtime.memory.list_episodes(query, outcome, limit)}
+
+
+@app.post("/memory/procedures")
+async def memory_procedure_store(request: ProcedureRequest) -> dict[str, Any]:
+    if not request.steps:
+        raise HTTPException(status_code=422, detail="At least one step is required")
+    return runtime.memory.upsert_procedure(
+        request.name,
+        request.description,
+        request.steps,
+        request.validators,
+        request.source_evidence,
+        request.confidence,
+        request.tags,
+    )
+
+
+@app.get("/memory/procedures")
+async def memory_procedures(query: str = "", limit: int = 20) -> dict[str, Any]:
+    return {"procedures": runtime.memory.list_procedures(query, limit)}
+
+
+@app.post("/memory/procedures/{procedure_id}/score")
+async def memory_procedure_score(procedure_id: int, request: ProcedureScoreRequest) -> dict[str, Any]:
+    result = runtime.memory.score_procedure(procedure_id, request.succeeded, request.evidence)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error", "procedure not found"))
+    return result
 
 
 @app.post("/process")
