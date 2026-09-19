@@ -124,6 +124,10 @@ class OrchestrationRequest(BaseModel):
     target_workers: list[str] = Field(default_factory=lambda: ["codex", "cursor", "antigravity"])
 
 
+class EmergencyStopRequest(BaseModel):
+    reason: str = "user_requested"
+
+
 @app.on_event("startup")
 async def startup() -> None:
     await runtime.start()
@@ -215,6 +219,21 @@ async def capabilities() -> dict[str, Any]:
         "capabilities": runtime.capabilities.discover_capabilities(),
         "health": runtime.capabilities.health_check(),
     }
+
+
+@app.get("/security/status")
+async def security_status() -> dict[str, Any]:
+    return {"emergency_stop": runtime.security.emergency_stop_active, "health": runtime.security.health()}
+
+
+@app.post("/security/emergency-stop")
+async def security_emergency_stop(request: EmergencyStopRequest) -> dict[str, Any]:
+    return runtime.security.emergency_stop(request.reason)
+
+
+@app.post("/security/emergency-stop/clear")
+async def security_emergency_stop_clear() -> dict[str, Any]:
+    return runtime.security.clear_emergency_stop()
 
 
 
@@ -311,6 +330,10 @@ async def connector_execute(name: str, request: ProcessRequest) -> dict[str, Any
     if not connector:
         raise HTTPException(status_code=404, detail=f"Connector '{name}' not found")
     action = request.context.get("action", "")
+    allowed, reason = runtime.security.execution_allowed(name, str(action))
+    if not allowed:
+        runtime.bus.publish("security.permission_denied", {"connector": name, "action": action, "reason": reason}, "security")
+        raise HTTPException(status_code=423, detail=reason)
     params = {k: v for k, v in request.context.items() if k != "action"}
     execute_fn = getattr(connector, "execute", None)
     if not execute_fn:
