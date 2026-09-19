@@ -58,6 +58,13 @@ class ProjectOrchestrator:
                 await self._loop_task
             except asyncio.CancelledError:
                 pass
+        for adapter in self.adapters.values():
+            close = getattr(adapter, "close", None)
+            if close:
+                try:
+                    await close()
+                except Exception as exc:
+                    logger.warning("Adapter cleanup failed: %s", exc)
 
     def snapshot(self) -> dict[str, Any]:
         """Return serializable canonical project state for API/UI consumers."""
