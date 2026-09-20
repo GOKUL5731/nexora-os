@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Activity, Zap } from "lucide-react";
+import { Activity, Cpu, Zap, Database, Terminal, Shield, Layers, HardDrive, Clock } from "lucide-react";
 import { cn } from "../utils";
 import { useNexora } from "../../context/NexoraContext";
 
@@ -7,23 +7,21 @@ function MetricBar({
   label,
   value,
   colorClass = "bg-cyan-500",
-  glowClass = "shadow-[0_0_10px_rgba(0,255,255,0.5)]",
 }: {
   label: string;
   value: number;
   colorClass?: string;
-  glowClass?: string;
 }) {
   const v = Math.min(100, Math.max(0, value));
   return (
-    <div className="mb-5">
-      <div className="flex justify-between text-xs font-['Rajdhani'] tracking-[0.1em] mb-1.5">
-        <span className="text-cyan-500/80 uppercase font-semibold">{label}</span>
-        <span className="text-cyan-300 font-mono">{v.toFixed(0)}%</span>
+    <div className="space-y-1">
+      <div className="flex justify-between text-[11px] font-mono">
+        <span className="text-slate-400">{label}</span>
+        <span className="text-slate-200 font-medium">{v.toFixed(0)}%</span>
       </div>
-      <div className="h-1.5 w-full bg-black/60 rounded-full overflow-hidden border border-cyan-900/30">
+      <div className="h-1.5 w-full bg-slate-900/50 rounded-full overflow-hidden border border-cyan-500/10">
         <div
-          className={cn("h-full rounded-full transition-all duration-500", colorClass, glowClass)}
+          className={cn("h-full rounded-full transition-all duration-300 backdrop-blur-sm", colorClass)}
           style={{ width: `${v}%` }}
         />
       </div>
@@ -31,30 +29,24 @@ function MetricBar({
   );
 }
 
-function ModuleStatus({ name, active, statusText }: { name: string; active: boolean; statusText: string }) {
+function ModuleRow({ name, active, statusText }: { name: string; active: boolean; statusText: string }) {
   const isFailed = statusText === "FAILED" || statusText === "ERROR";
   return (
-    <div className="flex items-center justify-between py-2.5 border-b border-cyan-900/20 group hover:bg-cyan-950/20 px-2 -mx-2 rounded transition-colors">
-      <span className="text-[13px] font-['Rajdhani'] tracking-wider text-cyan-200 group-hover:text-white transition-colors">
-        {name}
-      </span>
-      <div className="flex items-center gap-2">
-        <span className={cn(
-          "text-[9px] font-mono tracking-widest",
-          isFailed ? "text-red-400 font-semibold" : "text-cyan-600/80"
-        )}>
+    <div className="flex items-center justify-between py-1.5 border-b border-cyan-500/10 text-xs font-mono">
+      <span className="text-slate-300 text-[11px] truncate max-w-[170px]">{name}</span>
+      <div className="flex items-center gap-1.5">
+        <span
+          className={cn(
+            "text-[9px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider border backdrop-blur-sm",
+            isFailed
+              ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+              : active
+              ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"
+              : "bg-slate-900/50 border-slate-800/50 text-slate-500"
+          )}
+        >
           {statusText}
         </span>
-        <div
-          className={cn(
-            "w-1.5 h-1.5 rounded-full",
-            isFailed
-              ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-[pulse_1s_ease-in-out_infinite]"
-              : active
-                ? "bg-cyan-400 shadow-[0_0_8px_rgba(0,255,255,0.8)] animate-[pulse_2s_ease-in-out_infinite]"
-                : "bg-cyan-900",
-          )}
-        />
       </div>
     </div>
   );
@@ -62,25 +54,26 @@ function ModuleStatus({ name, active, statusText }: { name: string; active: bool
 
 const MODULE_LABELS: Record<string, string> = {
   orchestrator: "Orchestrator",
-  memory_brain: "Memory Brain",
+  memory_brain: "Memory Engine",
   voice_engine: "Voice Engine",
   workflow_engine: "Workflow Engine",
   visual_workflow_engine: "Graph Engine",
   nlp_pipeline: "NLP Pipeline",
   ai_lab: "AI Lab Sandbox",
-  websocket_manager: "WebSocket Bridge",
+  websocket_manager: "WebSocket Manager",
+  cognitive_intelligence: "Cognitive Engine",
 };
 
-export function RightPanel() {
-  const { status, connected, modules: apiModules } = useNexora();
+export function RightPanel({ open }: { open?: boolean }) {
+  const { status, connected, modules: apiModules, brainState, cognitionState, agentSteps, busy } = useNexora();
+
   const cpu = status?.cpu ?? 0;
   const ram = status?.ram ?? 0;
   const gpu = status?.gpu?.utilization ?? 0;
+  const eventsPerSec = status?.events_per_sec ?? 0;
 
   const modules = useMemo(() => {
     const rows: { name: string; active: boolean; statusText: string }[] = [];
-    const keys = ["orchestrator", "memory_brain", "voice_engine", "workflow_engine", "visual_workflow_engine", "nlp_pipeline", "ai_lab", "websocket_manager"];
-    
     if (apiModules && apiModules.length > 0) {
       apiModules.forEach((m) => {
         const isOnline = m.status === "online" || m.status === "running";
@@ -91,6 +84,7 @@ export function RightPanel() {
         });
       });
     } else {
+      const keys = ["orchestrator", "memory_brain", "voice_engine", "workflow_engine", "websocket_manager", "cognitive_intelligence"];
       for (const key of keys) {
         rows.push({
           name: MODULE_LABELS[key] ?? key,
@@ -102,42 +96,99 @@ export function RightPanel() {
     return rows;
   }, [apiModules, connected]);
 
+  if (open === false) return null;
+
   return (
-    <div className="w-[340px] h-full bg-black/60 backdrop-blur-xl border-l border-cyan-500/20 p-6 overflow-y-auto no-scrollbar hidden lg:flex flex-col z-10 shadow-[-20px_0_40px_rgba(0,0,0,0.5)]">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-6 text-cyan-400 border-b border-cyan-900/30 pb-2">
-          <Activity className="w-5 h-5" />
-          <h2 className="text-sm font-['Rajdhani'] font-bold tracking-[0.2em] uppercase">System Overview</h2>
+    <aside className="w-80 h-full bg-[#050811]/60 backdrop-blur-xl border-l border-cyan-500/10 p-4 overflow-y-auto no-scrollbar flex flex-col gap-4 shrink-0 z-10 select-none">
+      {/* 1. Context Summary Header */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-[10px] font-mono text-cyan-500/60 uppercase tracking-[0.2em] border-b border-cyan-500/10 pb-2">
+          <span className="flex items-center gap-1.5 text-cyan-400 font-semibold">
+            <Activity className="w-3.5 h-3.5" />
+            Context
+          </span>
+          <span className="text-[9px] text-cyan-500/40">LIVE</span>
         </div>
 
-        <div className="p-5 rounded-xl border border-cyan-500/20 bg-gradient-to-b from-cyan-950/20 to-black/40 mb-6 relative overflow-hidden shadow-[inset_0_0_20px_rgba(0,255,255,0.05)]">
-          <MetricBar label="CPU CORE" value={cpu} />
-          <MetricBar label="GPU UTIL" value={gpu} colorClass="bg-blue-400" glowClass="shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
-          <MetricBar label="MEMORY" value={ram} />
-          <div className="mt-4 pt-4 border-t border-cyan-900/30 text-[10px] font-mono text-cyan-600 flex justify-between">
-            <span>LLM</span>
-            <span className={status?.llm_ready ? "text-green-400" : "text-amber-500"}>
-              {status?.llm_ready ? "ONLINE" : "OFFLINE"}
+        {/* Current Active Model Card */}
+        <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10 backdrop-blur-sm space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Model
             </span>
+            <span className="text-cyan-300 font-medium">llama3.2:1b</span>
           </div>
-          <div className="text-[10px] font-mono text-cyan-600 flex justify-between mt-1">
-            <span>Events/s</span>
-            <span>{status?.events_per_sec?.toFixed(1) ?? "—"}</span>
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
+            <span>Autonomy Level:</span>
+            <span className="text-slate-300">Level 4 (Full Orchestration)</span>
           </div>
         </div>
       </div>
 
-      <div className="flex-1">
-        <div className="flex items-center gap-3 mb-6 text-cyan-400 border-b border-cyan-900/30 pb-2">
-          <Zap className="w-5 h-5" />
-          <h2 className="text-sm font-['Rajdhani'] font-bold tracking-[0.2em] uppercase">Active Modules</h2>
+      {/* 2. Active Task & Execution Timeline */}
+      <div className="space-y-3">
+        <div className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-[0.2em] flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-cyan-400" /> Active Task
+          </span>
+          {busy && <span className="text-[9px] text-amber-400 animate-pulse">EXECUTING</span>}
         </div>
-        <div className="flex flex-col bg-black/40 border border-cyan-500/20 rounded-xl p-4 shadow-[inset_0_0_20px_rgba(0,255,255,0.05)]">
+        <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10 backdrop-blur-sm text-xs font-mono space-y-2">
+          <div className="text-slate-300 font-medium truncate">
+            {brainState?.current_goal || (busy ? "Processing request…" : "Idle — Awaiting task")}
+          </div>
+
+          {agentSteps.length > 0 && (
+            <div className="space-y-1.5 border-t border-cyan-500/10 pt-2">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Execution Timeline</span>
+              {agentSteps.slice(-3).map((s) => (
+                <div key={s.step} className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span className="text-cyan-400 font-semibold">#{s.step}</span>
+                  <span className="text-amber-300">{s.action}</span>
+                  <span className="text-slate-500 truncate">{s.thought}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. System Performance Metrics */}
+      <div className="space-y-3">
+        <div className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-[0.2em] flex items-center gap-1.5">
+          <HardDrive className="w-3.5 h-3.5 text-cyan-400" /> System Metrics
+        </div>
+        <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10 backdrop-blur-sm space-y-3">
+          <MetricBar label="CPU Core" value={cpu} colorClass="bg-cyan-400" />
+          <MetricBar label="RAM Memory" value={ram} colorClass="bg-blue-400" />
+          <MetricBar label="GPU Utilization" value={gpu} colorClass="bg-indigo-400" />
+
+          <div className="pt-2 border-t border-cyan-500/10 grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
+            <div>
+              <span className="block text-slate-500">Events/sec</span>
+              <span className="text-slate-200 font-medium">{eventsPerSec.toFixed(1)}</span>
+            </div>
+            <div>
+              <span className="block text-slate-500">Knowledge Hits</span>
+              <span className="text-slate-200 font-medium">
+                {cognitionState?.last_context_summary?.knowledge_hits ?? 0}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Active System Modules */}
+      <div className="space-y-3 flex-1">
+        <div className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-[0.2em] flex items-center gap-1.5">
+          <Layers className="w-3.5 h-3.5 text-cyan-400" /> Core Modules
+        </div>
+        <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10 backdrop-blur-sm space-y-1">
           {modules.map((m) => (
-            <ModuleStatus key={m.name} name={m.name} active={m.active} statusText={m.statusText} />
+            <ModuleRow key={m.name} name={m.name} active={m.active} statusText={m.statusText} />
           ))}
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

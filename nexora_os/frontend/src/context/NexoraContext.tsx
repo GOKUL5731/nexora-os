@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { nexoraApi, ProcessResult, StatusPayload, wsEventsUrl } from "../api/client";
+import { CognitionStatus, nexoraApi, ProcessResult, StatusPayload, wsEventsUrl } from "../api/client";
 
 type AgentRow = { name: string; status: string; tools?: string[] };
 type WorkflowRow = { name: string; enabled: boolean; last_status?: string; step_count?: number };
@@ -14,6 +14,17 @@ type MemoryItem = { summary?: string; content?: string };
 type BusEvent = { topic: string; payload: unknown; sequence: number };
 type ModuleRow = { name: string; status: string; detail?: string };
 export type AgentStep = { step: number; thought: string; action: string; params: Record<string, unknown>; timestamp: number };
+type BrainState = {
+  stage?: string;
+  current_goal_id?: string;
+  current_goal?: string;
+  current_plan?: Array<Record<string, unknown>>;
+  selected_capability?: string;
+  active_model?: string;
+  verification_status?: string;
+  goals?: Array<Record<string, unknown>>;
+  capabilities?: Array<Record<string, unknown>>;
+};
 
 type NexoraContextValue = {
   connected: boolean;
@@ -31,6 +42,8 @@ type NexoraContextValue = {
   error: string | null;
   agentSteps: AgentStep[];
   pendingQuestion: string | null;
+  brainState: BrainState | null;
+  cognitionState: CognitionStatus | null;
   sendCommand: (text: string, context?: Record<string, unknown>) => Promise<ProcessResult | null>;
   confirmPending: (yes: boolean) => Promise<void>;
   startVoice: () => Promise<void>;
@@ -58,6 +71,8 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [brainState, setBrainState] = useState<BrainState | null>(null);
+  const [cognitionState, setCognitionState] = useState<CognitionStatus | null>(null);
 
   const refreshMemory = useCallback(async (query = "") => {
     try {
@@ -113,6 +128,12 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
             if (data.state.modules) {
               setModules(data.state.modules);
             }
+            if (data.state.brain) {
+              setBrainState(data.state.brain);
+            }
+            if (data.state.cognition) {
+              setCognitionState(data.state.cognition);
+            }
           }
 
           if (data.events && data.events.length > 0) {
@@ -137,7 +158,10 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
               }
               // Extract autonomous agent step events
               for (const ev of data.events) {
-                if (ev.topic === "agent.step") {
+                if (ev.topic === "runtime.response" && ev.payload && typeof ev.payload === "object") {
+                  const response = ev.payload as Record<string, unknown>;
+                  if (typeof response.message === "string") setLastMessage(response.message);
+                } else if (ev.topic === "agent.step") {
                   const p = ev.payload as Record<string, unknown>;
                   setAgentSteps((prev) => [
                     ...prev.slice(-19),
@@ -193,7 +217,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       try {
         const result = await nexoraApi.process(text.trim(), {
           ...context,
-          speak: context.mode === "voice",
+          speak: Boolean(context.speak) || context.mode === "voice",
         });
         if (result.type === "confirmation_required" && result.task_id) {
           setPendingTaskId(result.task_id);
@@ -274,6 +298,8 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       error,
       agentSteps,
       pendingQuestion,
+      brainState,
+      cognitionState,
       sendCommand,
       confirmPending,
       startVoice,
@@ -298,6 +324,8 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       error,
       agentSteps,
       pendingQuestion,
+      brainState,
+      cognitionState,
       sendCommand,
       confirmPending,
       startVoice,

@@ -1,106 +1,180 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { TopBar } from "./components/TopBar";
 import { Sidebar } from "./components/Sidebar";
-import { CognitiveOrb } from "./components/CognitiveOrb";
 import { RightPanel } from "./components/RightPanel";
-import { LowerPanels } from "./components/LowerPanels";
 import { BrainView } from "./components/BrainView";
-import { CommandBar } from "./components/CommandBar";
-import { NexoraProvider } from "../context/NexoraContext";
-import { VoicePage } from "./components/pages/VoicePage";
-import { VisionPage } from "./components/pages/VisionPage";
+import { NexoraProvider, useNexora } from "../context/NexoraContext";
+import { Scene3D } from "./components/3d/Scene3D";
+
+import { DashboardPage } from "./components/pages/DashboardPage";
+import { ChatPage } from "./components/pages/ChatPage";
+import { ProjectsPage } from "./components/pages/ProjectsPage";
+import { KnowledgePage } from "./components/pages/KnowledgePage";
+import { MemoryPage } from "./components/pages/MemoryPage";
 import { AgentsPage } from "./components/pages/AgentsPage";
 import { WorkflowStudio } from "./components/workflow/WorkflowStudio";
-import { MemoryPage } from "./components/pages/MemoryPage";
 import { AutomationPage } from "./components/pages/AutomationPage";
+import { VisionPage } from "./components/pages/VisionPage";
+import { VoicePage } from "./components/pages/VoicePage";
+import { ConnectorsPage } from "./components/pages/ConnectorsPage";
 import { LabPage } from "./components/pages/LabPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
-import { useNexora } from "../context/NexoraContext";
+import { CompanionPage } from "./components/pages/CompanionPage";
+import { PetGPage } from "./components/pages/PetGPage";
+
 import { motion, AnimatePresence } from "motion/react";
 import "../styles/custom.css";
 
 function AppShell() {
-  const [activeTab, setActiveTab] = useState("home");
-  const { connected, error } = useNexora();
+  const initialTab = typeof window !== "undefined" ? window.location.hash.replace("#", "") || "dashboard" : "dashboard";
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [commandSearchOpen, setCommandSearchOpen] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash.replace("#", "") !== activeTab) {
+      window.history.replaceState(null, "", `#${activeTab}`);
+    }
+  }, [activeTab]);
 
   const renderTab = () => {
     switch (activeTab) {
+      case "dashboard":
       case "home":
-        return (
-          <>
-            <CognitiveOrb />
-            <CommandBar className="absolute bottom-[42%] left-0 right-0 z-20" />
-            <LowerPanels />
-          </>
-        );
+        return <DashboardPage onNavigate={setActiveTab} />;
+      case "chat":
+        return <ChatPage />;
       case "brain":
-        return <BrainView />;
-      case "voice":
-        return <VoicePage />;
-      case "vision":
-        return <VisionPage />;
+        return <div className="w-full h-full flex items-center justify-center">
+          <BrainView />
+        </div>;
+      case "projects":
+        return <ProjectsPage />;
+      case "knowledge":
+        return <KnowledgePage />;
+      case "memory":
+        return <MemoryPage />;
       case "agents":
         return <AgentsPage />;
       case "workflows":
         return <WorkflowStudio />;
       case "automation":
         return <AutomationPage />;
-      case "memory":
-        return <MemoryPage />;
+      case "vision":
+        return <VisionPage />;
+      case "voice":
+        return <VoicePage />;
+      case "connectors":
+        return <ConnectorsPage />;
       case "lab":
         return <LabPage />;
       case "settings":
         return <SettingsPage />;
+      case "companion":
+        return <CompanionPage />;
+      case "pet-g":
+        return <PetGPage />;
       default:
-        return null;
+        return <DashboardPage onNavigate={setActiveTab} />;
     }
   };
 
   return (
-    <div className="w-full h-screen bg-[#010308] text-white overflow-hidden flex font-sans selection:bg-cyan-500/30">
-      <div className="absolute inset-0 z-0">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vw] md:w-[1000px] h-[100vw] md:h-[1000px] bg-[radial-gradient(circle_at_center,rgba(0,180,255,0.03)_0%,transparent_60%)] rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI4Ni42Ij48cGF0aCBkPSJNMjUgMGwyNSAxNC40djI4LjhMMjUgNTcuNkwwIDQzLjJWMTRuNHpNMjUgODYuNmwyNS0xNC40VjQzLjRsLTI1IDE0LjRMMCA0My40djI4Ljh6IiBmaWxsPSJub25lIiBzdHJva2U9IiMwNmI2ZDQiIHN0cm9rZS13aWR0aD0iMSIvPjwvc3ZnPg==')] bg-[length:30px_52px] pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#010308_100%)] pointer-events-none" />
-      </div>
+    <div className="g-os-shell w-full h-screen text-slate-100 overflow-hidden flex flex-col font-sans relative">
+      {/* 3D Background Scene */}
+      <Scene3D />
 
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} connected={connected} />
+      {/* Top Header Bar */}
+      <TopBar
+        activeTab={activeTab}
+        rightPanelOpen={rightPanelOpen}
+        setRightPanelOpen={setRightPanelOpen}
+        onOpenCommandSearch={() => setCommandSearchOpen(true)}
+      />
 
-      <div className="flex-1 flex flex-col relative z-10 h-full overflow-hidden">
-        <header className="h-16 flex items-center px-4 md:px-8 border-b border-cyan-900/20 bg-black/20 backdrop-blur-sm">
-          <div className="flex items-center gap-4 text-xs font-['Rajdhani'] tracking-[0.2em] uppercase text-cyan-500">
-            <span>SYSTEM</span>
-            <span className="text-cyan-800">/</span>
-            <span className="text-cyan-100">{activeTab}</span>
-          </div>
-          <div className="ml-auto flex items-center gap-4 text-[10px] font-mono">
-            <span className={connected ? "text-cyan-400" : "text-red-400/80"}>
-              {connected ? "BACKEND ONLINE" : "BACKEND OFFLINE"}
-            </span>
-            {error && <span className="text-red-400/70 truncate max-w-[200px]">{error}</span>}
-            <span className="text-cyan-600/50">
-              {new Date().toISOString().split("T")[0].replace(/-/g, ".")}
-            </span>
-          </div>
-        </header>
+      {/* Main 3-Column Layout */}
+      <div className="g-workbench flex-1 flex min-h-0 relative overflow-hidden pointer-events-none">
+        {/* Left Column: Navigation Sidebar */}
+        <div className="pointer-events-auto">
+          <Sidebar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            collapsed={sidebarCollapsed}
+            setCollapsed={setSidebarCollapsed}
+          />
+        </div>
 
-        <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Center Column: Workspace View */}
+        <main className="g-main-surface flex-1 flex flex-col min-w-0 relative overflow-hidden pointer-events-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.02 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="flex-1 flex flex-col overflow-hidden"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="flex-1 flex flex-col overflow-hidden h-full"
             >
               {renderTab()}
             </motion.div>
           </AnimatePresence>
-          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-20" />
+        </main>
+
+        {/* Right Column: Context Panel */}
+        <div className="pointer-events-auto">
+          <RightPanel open={rightPanelOpen} />
         </div>
       </div>
 
-      <RightPanel />
+      {/* Command Search Modal (Cmd+K) */}
+      {commandSearchOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
+          <div className="w-full max-w-xl bg-[#0d1322] border border-slate-700 rounded-xl shadow-2xl overflow-hidden font-mono text-xs">
+            <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+              <span className="text-slate-300 font-semibold uppercase">Command Palette</span>
+              <button
+                onClick={() => setCommandSearchOpen(false)}
+                className="text-slate-500 hover:text-slate-300 px-2 py-0.5 rounded"
+              >
+                ESC
+              </button>
+            </div>
+            <div className="p-3 space-y-1">
+              <button
+                onClick={() => {
+                  setActiveTab("chat");
+                  setCommandSearchOpen(false);
+                }}
+                className="w-full text-left p-2.5 rounded hover:bg-slate-800/80 text-slate-300 flex items-center justify-between"
+              >
+                <span>Open Chat Workspace</span>
+                <span className="text-[10px] text-slate-500">Navigation</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("knowledge");
+                  setCommandSearchOpen(false);
+                }}
+                className="w-full text-left p-2.5 rounded hover:bg-slate-800/80 text-slate-300 flex items-center justify-between"
+              >
+                <span>Search Knowledge Base</span>
+                <span className="text-[10px] text-slate-500">Navigation</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("memory");
+                  setCommandSearchOpen(false);
+                }}
+                className="w-full text-left p-2.5 rounded hover:bg-slate-800/80 text-slate-300 flex items-center justify-between"
+              >
+                <span>Open Memory DB</span>
+                <span className="text-[10px] text-slate-500">Navigation</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
