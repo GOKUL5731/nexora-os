@@ -13,7 +13,7 @@ import {
   Panel,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Play, Save, Sparkles, Plus, Trash2 } from "lucide-react";
+import { Boxes, Play, Save, Sparkles } from "lucide-react";
 import { nexoraApi, GraphSpec } from "../../../api/client";
 import { cn } from "../../utils";
 
@@ -23,7 +23,7 @@ const DEFAULT_NODES: Node[] = [
     type: "default",
     position: { x: 80, y: 120 },
     data: { label: "Trigger", nodeType: "trigger" },
-    style: { background: "#0a1628", border: "1px solid #06b6d4", color: "#a5f3fc", minWidth: 140 },
+    style: { background: "#111827", border: "1px solid rgba(148,163,184,.28)", color: "#e5e7eb", minWidth: 140, borderRadius: 14 },
   },
 ];
 
@@ -39,14 +39,14 @@ function specToFlow(spec: GraphSpec): { nodes: Node[]; edges: Edge[] } {
     type: "default",
     position: n.position || { x: 0, y: 0 },
     data: { label: n.type, nodeType: n.type, ...n.data },
-    style: { background: "#0a1628", border: "1px solid #06b6d4", color: "#e0f2fe", minWidth: 150 },
+    style: { background: "#111827", border: "1px solid rgba(148,163,184,.28)", color: "#e5e7eb", minWidth: 150, borderRadius: 14 },
   }));
   const edges: Edge[] = (spec.graph?.edges || []).map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     animated: true,
-    style: { stroke: "#06b6d4" },
+    style: { stroke: "#38bdf8" },
   }));
   return { nodes: nodes.length ? nodes : DEFAULT_NODES, edges };
 }
@@ -92,7 +92,7 @@ export function WorkflowStudio() {
   }, [refreshList]);
 
   const onConnect = useCallback(
-    (conn: Connection) => setEdges((eds) => addEdge({ ...conn, animated: true, style: { stroke: "#06b6d4" } }, eds)),
+    (conn: Connection) => setEdges((eds) => addEdge({ ...conn, animated: true, style: { stroke: "#38bdf8" } }, eds)),
     [setEdges],
   );
 
@@ -105,7 +105,7 @@ export function WorkflowStudio() {
         type: "default",
         position: { x: 100 + nds.length * 40, y: 80 + nds.length * 30 },
         data: { label: type, nodeType: type },
-        style: { background: "#0a1628", border: "1px solid #0891b2", color: "#cffafe", minWidth: 150 },
+        style: { background: "#111827", border: "1px solid rgba(148,163,184,.28)", color: "#e5e7eb", minWidth: 150, borderRadius: 14 },
       },
     ]);
   };
@@ -178,57 +178,64 @@ export function WorkflowStudio() {
   };
 
   return (
-    <div className="flex-1 flex h-full min-h-0">
-      <div className="w-52 border-r border-cyan-900/40 bg-black/50 p-3 flex flex-col gap-2 overflow-y-auto">
-        <p className="text-[10px] text-cyan-600 font-mono uppercase tracking-widest mb-1">Nodes</p>
+    <div className="g-workflow-shell">
+      <aside className="g-workflow-sidebar">
+        <div className="g-section-heading">
+          <span>Node palette</span>
+          <small>{NODE_PALETTE.length}</small>
+        </div>
         {NODE_PALETTE.map((t) => (
           <button
             key={t}
             onClick={() => addNode(t)}
-            className="text-left text-xs font-mono text-cyan-400 hover:bg-cyan-950/40 px-2 py-1.5 rounded border border-transparent hover:border-cyan-800"
+            className="g-node-chip"
           >
-            + {t}
+            <Boxes className="h-3.5 w-3.5" />
+            {t}
           </button>
         ))}
-        <hr className="border-cyan-900/40 my-2" />
-        <p className="text-[10px] text-cyan-600 font-mono uppercase">Saved</p>
+        <div className="g-sidebar-divider" />
+        <div className="g-section-heading">
+          <span>Saved flows</span>
+          <small>{graphs.length}</small>
+        </div>
         {graphs.map((g) => (
           <button
             key={g.name}
             onClick={() => loadGraph(g.name)}
-            className="text-left text-xs text-cyan-500 hover:text-cyan-200 truncate"
+            className="g-saved-flow"
           >
             {g.name}
           </button>
         ))}
-      </div>
+      </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex flex-wrap items-center gap-2 p-3 border-b border-cyan-900/30 bg-black/40">
+      <div className="g-workflow-main">
+        <div className="g-workflow-toolbar">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="bg-black/60 border border-cyan-800/50 rounded px-2 py-1 text-sm text-cyan-100 font-mono w-40"
+            className="g-workflow-name"
             placeholder="workflow name"
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="flex-1 min-w-[200px] bg-black/60 border border-cyan-800/50 rounded px-2 py-1 text-sm text-cyan-200 font-mono"
+            className="g-workflow-description"
             placeholder="Describe workflow for AI generator…"
           />
-          <button disabled={busy} onClick={generate} className="flex items-center gap-1 px-3 py-1.5 rounded border border-cyan-500/40 text-cyan-300 text-xs hover:bg-cyan-950/30 disabled:opacity-40">
+          <button disabled={busy} onClick={generate} className="g-secondary-action">
             <Sparkles className="w-3 h-3" /> Generate
           </button>
-          <button disabled={busy} onClick={save} className="flex items-center gap-1 px-3 py-1.5 rounded border border-cyan-500/40 text-cyan-300 text-xs hover:bg-cyan-950/30 disabled:opacity-40">
+          <button disabled={busy} onClick={save} className="g-secondary-action">
             <Save className="w-3 h-3" /> Save
           </button>
-          <button disabled={busy} onClick={run} className="flex items-center gap-1 px-3 py-1.5 rounded bg-cyan-900/40 border border-cyan-400/50 text-cyan-100 text-xs hover:bg-cyan-800/30 disabled:opacity-40">
+          <button disabled={busy} onClick={run} className="g-primary-action">
             <Play className="w-3 h-3" /> Run
           </button>
         </div>
 
-        <div className="flex-1 min-h-[400px]">
+        <div className="g-flow-canvas">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -236,19 +243,19 @@ export function WorkflowStudio() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             fitView
-            className="bg-[#010308]"
+            className="g-react-flow"
           >
-            <Background color="#0e7490" gap={20} />
+            <Background color="#334155" gap={24} />
             <Controls />
-            <MiniMap nodeColor="#06b6d4" maskColor="rgb(0,0,0,0.8)" />
-            <Panel position="top-right" className="text-[10px] text-cyan-600 font-mono">
+            <MiniMap nodeColor="#38bdf8" maskColor="rgb(2,6,23,0.82)" />
+            <Panel position="top-right" className="g-flow-count">
               {nodes.length} nodes · {edges.length} edges
             </Panel>
           </ReactFlow>
         </div>
 
         {trace && (
-          <pre className="max-h-32 overflow-auto text-[10px] font-mono text-cyan-600/90 p-3 border-t border-cyan-900/30 bg-black/60">
+          <pre className="g-workflow-trace">
             {trace}
           </pre>
         )}

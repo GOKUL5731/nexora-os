@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlaskConical } from "lucide-react";
+import { BrainCircuit, FlaskConical, ServerCog, Sparkles } from "lucide-react";
 import { nexoraApi } from "../../../api/client";
 import { useNexora } from "../../../context/NexoraContext";
 
@@ -12,39 +12,61 @@ export function LabPage() {
   }, []);
 
   const llm = (settings.llm ?? {}) as Record<string, unknown>;
+  const labEvents = events.slice(-18).reverse();
 
   return (
-    <div className="flex-1 p-8 overflow-auto">
-      <h2 className="text-xl font-['Rajdhani'] text-cyan-400 tracking-widest uppercase flex gap-2 items-center">
-        <FlaskConical className="w-5 h-5" /> AI Lab
-      </h2>
-      <p className="mt-2 text-xs font-mono text-cyan-700">
-        Recovery Mode: agent generation is disabled. This page shows only live model and runtime diagnostics.
-      </p>
-      <div className="mt-6 grid md:grid-cols-3 gap-3">
-        <div className="p-4 rounded-xl border border-cyan-900/40 bg-black/40">
-          <p className="text-[10px] font-mono text-cyan-700 uppercase">LLM Ready</p>
-          <p className={status?.llm_ready ? "text-emerald-400" : "text-amber-400"}>
-            {status?.llm_ready ? "READY" : "NOT READY"}
-          </p>
+    <div className="g-page">
+      <section className="g-page-hero">
+        <div>
+          <p className="g-eyebrow">AI Lab</p>
+          <h1>Model diagnostics without pretending providers exist.</h1>
+          <p>Recovery mode stays honest: this lab exposes local model readiness, settings, and runtime event evidence.</p>
         </div>
-        <div className="p-4 rounded-xl border border-cyan-900/40 bg-black/40">
-          <p className="text-[10px] font-mono text-cyan-700 uppercase">Ollama Host</p>
-          <p className="text-cyan-300 break-all">{String(llm.host ?? "unknown")}</p>
+        <span className={`g-live-pill ${status?.llm_ready ? "g-status-good" : "g-status-warn"}`}>
+          <FlaskConical className="h-3.5 w-3.5" />
+          {status?.llm_ready ? "LLM ready" : "Model unavailable"}
+        </span>
+      </section>
+
+      <section className="g-card-grid g-card-grid-three">
+        <article className="g-system-card">
+          <div className="g-card-topline"><span className="g-card-icon"><BrainCircuit className="h-4 w-4" /></span></div>
+          <h2>Reasoning state</h2>
+          <p>{status?.llm_ready ? "Local reasoning endpoint is reporting ready." : "No ready local model has been reported."}</p>
+        </article>
+        <article className="g-system-card">
+          <div className="g-card-topline"><span className="g-card-icon"><ServerCog className="h-4 w-4" /></span></div>
+          <h2>Ollama host</h2>
+          <p className="break-all">{String(llm.host ?? "unknown")}</p>
+        </article>
+        <article className="g-system-card">
+          <div className="g-card-topline"><span className="g-card-icon"><Sparkles className="h-4 w-4" /></span></div>
+          <h2>Model</h2>
+          <p>{String(llm.model || "no local model detected")}</p>
+        </article>
+      </section>
+
+      <section className="g-panel">
+        <div className="g-section-heading">
+          <span>Recent AI / runtime events</span>
+          <small>{labEvents.length} visible</small>
         </div>
-        <div className="p-4 rounded-xl border border-cyan-900/40 bg-black/40">
-          <p className="text-[10px] font-mono text-cyan-700 uppercase">Model</p>
-          <p className="text-cyan-300">{String(llm.model || "no local model detected")}</p>
-        </div>
-      </div>
-      <div className="mt-6 p-4 rounded-xl border border-cyan-900/40 bg-black/40">
-        <p className="text-[10px] font-mono text-cyan-700 uppercase mb-3">Recent AI / Runtime Events</p>
-        {events.slice(-20).reverse().map((event) => (
-          <div key={event.sequence} className="text-[10px] font-mono text-cyan-600 truncate">
-            {event.sequence} {event.topic}
+        {labEvents.length === 0 ? (
+          <div className="g-empty-inline">
+            <FlaskConical className="h-6 w-6" />
+            <p>No runtime events have reached the frontend yet.</p>
           </div>
-        ))}
-      </div>
+        ) : (
+          <div className="g-event-list">
+            {labEvents.map((event) => (
+              <div key={event.sequence}>
+                <span>#{event.sequence}</span>
+                <strong>{event.topic}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Mic, Volume2, Languages, Radio, Activity, Play, CheckCircle2 } from "lucide-react";
-import { useNexora } from "../../../context/NexoraContext";
+import { Languages, Mic, Play, Radio, Volume2, Waves } from "lucide-react";
 import { nexoraApi } from "../../../api/client";
+import { useNexora } from "../../../context/NexoraContext";
 
 export function VoicePage() {
   const { voiceState, startVoice, speak, lastMessage, connected } = useNexora();
-  const [ttsInput, setTtsInput] = useState("Hello! Jarvis voice system is online.");
+  const [ttsInput, setTtsInput] = useState("Hello! G voice system is online.");
   const [selectedLang, setSelectedLang] = useState("ta-en");
   const [livekit, setLivekit] = useState<Record<string, unknown> | null>(null);
 
@@ -22,156 +22,95 @@ export function VoicePage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 space-y-6 overflow-y-auto no-scrollbar font-mono text-xs select-none">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+    <div className="g-page">
+      <section className="g-page-hero">
         <div>
-          <h1 className="text-base font-bold text-slate-100 uppercase tracking-widest flex items-center gap-2">
-            <Mic className="w-4 h-4 text-cyan-400" />
-            Voice AI Pipeline & Multilingual Speech
-          </h1>
-          <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-            Voice Activity Detection (VAD), Tamil / Tanglish / English speech recognition, and streaming TTS
-          </p>
+          <p className="g-eyebrow">Voice AI</p>
+          <h1>Speak, listen, and verify realtime transport.</h1>
+          <p>VAD, multilingual recognition, TTS, and LiveKit transport status in one calm control room.</p>
         </div>
+        <span className={`g-live-pill ${isListening || isSpeaking ? "g-status-good" : "g-status-warn"}`}>
+          <Radio className="h-3.5 w-3.5" />
+          {voiceState.toUpperCase()}
+        </span>
+      </section>
 
-        <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-1 rounded text-[11px] font-mono border ${
-            isListening ? "bg-rose-950 border-rose-800 text-rose-400 animate-pulse" :
-            isSpeaking ? "bg-cyan-950 border-cyan-800 text-cyan-400 animate-pulse" :
-            "bg-slate-900 border-slate-800 text-slate-400"
-          }`}>
-            Status: {voiceState.toUpperCase()}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 1 Col: Voice Controls & Microphone Visualizer */}
-        <div className="p-5 rounded-xl bg-[#090d19] border border-slate-800 space-y-5">
-          <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider block border-b border-slate-800 pb-2">
-            Microphone & VAD Meter
-          </span>
-
-          {/* Animated Mic Status Visualizer */}
-          <div className="flex flex-col items-center justify-center p-6 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
-            <button
-              onClick={startVoice}
-              disabled={!connected}
-              className={`w-20 h-20 rounded-full border flex items-center justify-center transition-all ${
-                isListening
-                  ? "bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.4)] animate-pulse"
-                  : "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:scale-105"
-              }`}
-            >
-              <Mic className="w-8 h-8" />
-            </button>
-
-            <span className="text-xs text-slate-300 font-semibold">
-              {isListening ? "Listening for speech…" : "Click Microphone to Listen"}
-            </span>
-
-            <div className="flex items-center gap-2 text-[10px] text-slate-500">
-              <Radio className="w-3 h-3 text-cyan-400" />
-              <span>VAD RMS Threshold: 500</span>
-            </div>
+      <section className="g-voice-layout">
+        <div className="g-panel g-voice-control">
+          <div className="g-section-heading">
+            <span>Microphone</span>
+            <small>VAD threshold 500</small>
           </div>
-
-          {/* Supported Languages Selector */}
-          <div className="space-y-2">
-            <span className="text-[11px] text-slate-400 uppercase tracking-wider block">Language Model Engine</span>
-            <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={startVoice}
+            disabled={!connected}
+            className={`g-mic-button ${isListening ? "listening" : ""}`}
+            aria-label="Start voice listening"
+          >
+            <Mic className="h-9 w-9" />
+          </button>
+          <h2>{isListening ? "Listening for speech…" : "Ready when runtime is linked"}</h2>
+          <p>Voice actions stay disabled until the real backend connection is available.</p>
+          <div className="g-language-grid" aria-label="Language model selection">
+            {[
+              ["ta-en", "Tanglish"],
+              ["ta", "Tamil"],
+              ["en", "English"],
+            ].map(([value, label]) => (
               <button
-                onClick={() => setSelectedLang("ta-en")}
-                className={`p-2 rounded border text-center text-xs ${
-                  selectedLang === "ta-en"
-                    ? "bg-cyan-950 border-cyan-500/40 text-cyan-300 font-semibold"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}
+                key={value}
+                onClick={() => setSelectedLang(value)}
+                className={selectedLang === value ? "active" : ""}
               >
-                Tanglish (ta-en)
+                <Languages className="h-3.5 w-3.5" />
+                {label}
               </button>
-              <button
-                onClick={() => setSelectedLang("ta")}
-                className={`p-2 rounded border text-center text-xs ${
-                  selectedLang === "ta"
-                    ? "bg-cyan-950 border-cyan-500/40 text-cyan-300 font-semibold"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}
-              >
-                Tamil (ta)
-              </button>
-              <button
-                onClick={() => setSelectedLang("en")}
-                className={`p-2 rounded border text-center text-xs ${
-                  selectedLang === "en"
-                    ? "bg-cyan-950 border-cyan-500/40 text-cyan-300 font-semibold"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}
-              >
-                English (en)
-              </button>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Right 2 Cols: Speech Synthesis & Transcription Stream */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="p-4 rounded-xl bg-[#090d19] border border-slate-800 flex items-center justify-between gap-4">
-            <div>
-              <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider block">LiveKit Realtime Transport</span>
-              <p className="text-[11px] text-slate-500 font-sans mt-1">
-                Realtime voice/video transport with Ollama as the reasoning provider.
-              </p>
+        <div className="g-voice-stack">
+          <div className="g-panel">
+            <div className="g-section-heading">
+              <span>LiveKit realtime transport</span>
+              <small>{livekit ? (livekit.configured ? "configured" : "not configured") : "checking"}</small>
             </div>
-            <span className={`px-2.5 py-1 rounded border text-[11px] ${livekit?.configured ? "border-emerald-800 bg-emerald-950 text-emerald-400" : "border-amber-800 bg-amber-950 text-amber-400"}`}>
-              {livekit ? (livekit.configured ? "CONFIGURED" : "NOT CONFIGURED") : "CHECKING"}
-            </span>
+            <p className="g-muted-copy">
+              Realtime transport is separated from the LLM provider decision. Ollama remains the local reasoning path.
+            </p>
           </div>
 
-          {/* TTS Synthesizer Card */}
-          <div className="p-4 rounded-xl bg-[#090d19] border border-slate-800 space-y-3">
-            <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
-              <Volume2 className="w-4 h-4 text-cyan-400" />
-              Text-to-Speech (TTS) Synthesizer
-            </span>
-
-            <div className="flex gap-2">
+          <div className="g-panel">
+            <div className="g-section-heading">
+              <span>Text-to-speech synthesizer</span>
+              <small>{isSpeaking ? "speaking" : "idle"}</small>
+            </div>
+            <div className="g-input-row">
               <input
                 type="text"
                 value={ttsInput}
-                onChange={(e) => setTtsInput(e.target.value)}
+                onChange={(event) => setTtsInput(event.target.value)}
                 placeholder="Enter text to speak..."
-                className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500/50"
               />
-              <button
-                onClick={handleSpeak}
-                disabled={!connected || !ttsInput.trim()}
-                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
-              >
-                <Play className="w-4 h-4" />
-                <span>Speak</span>
+              <button onClick={handleSpeak} disabled={!connected || !ttsInput.trim()} className="g-primary-action">
+                <Play className="h-4 w-4" />
+                Speak
               </button>
             </div>
           </div>
 
-          {/* Live Transcription Stream */}
-          <div className="p-4 rounded-xl bg-[#090d19] border border-slate-800 space-y-3">
-            <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider block border-b border-slate-800 pb-2">
-              Live Speech Transcript Log
-            </span>
-
-            <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 min-h-[160px] text-xs text-slate-200 space-y-2">
-              <div className="flex items-center justify-between text-[10px] text-slate-500 border-b border-slate-800 pb-1">
-                <span>LAST UTTERANCE</span>
-                <span className="text-cyan-400">Detected: {selectedLang}</span>
-              </div>
-              <p className="text-slate-300 italic font-sans text-sm">"{lastMessage}"</p>
+          <div className="g-panel">
+            <div className="g-section-heading">
+              <span>Last utterance</span>
+              <small>{selectedLang}</small>
+            </div>
+            <div className="g-transcript-box">
+              <Waves className="h-5 w-5" />
+              <p>{lastMessage || "No utterance captured yet."}</p>
             </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
