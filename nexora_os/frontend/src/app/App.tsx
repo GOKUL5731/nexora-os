@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { TopBar } from "./components/TopBar";
-import { Sidebar } from "./components/Sidebar";
 import { RightPanel } from "./components/RightPanel";
 import { BrainView } from "./components/BrainView";
 import { NexoraProvider, useNexora } from "../context/NexoraContext";
@@ -23,20 +21,71 @@ import { CompanionPage } from "./components/pages/CompanionPage";
 import { PetGPage } from "./components/pages/PetGPage";
 
 import { motion, AnimatePresence } from "motion/react";
+import {
+  Activity,
+  Bot,
+  Brain,
+  Boxes,
+  Command,
+  Database,
+  FolderGit2,
+  Home,
+  Menu,
+  MessageSquare,
+  Mic,
+  Network,
+  PanelRight,
+  Search,
+  Settings,
+  Sparkles,
+  Telescope,
+  Video,
+  Workflow,
+  X,
+  Zap,
+} from "lucide-react";
 import "../styles/custom.css";
 
+const EXPERIENCE_NAV = [
+  { id: "dashboard", label: "Home", icon: Home, group: "Start" },
+  { id: "chat", label: "Talk", icon: MessageSquare, group: "Create" },
+  { id: "pet-g", label: "Pet G", icon: Bot, group: "Create" },
+  { id: "brain", label: "Brain", icon: Brain, group: "Core" },
+  { id: "memory", label: "Memory", icon: Database, group: "Core" },
+  { id: "knowledge", label: "Knowledge", icon: Telescope, group: "Core" },
+  { id: "projects", label: "Projects", icon: FolderGit2, group: "Build" },
+  { id: "agents", label: "Agents", icon: Network, group: "Build" },
+  { id: "workflows", label: "Flows", icon: Workflow, group: "Build" },
+  { id: "automation", label: "Actions", icon: Zap, group: "Build" },
+  { id: "vision", label: "Vision", icon: Video, group: "Senses" },
+  { id: "voice", label: "Voice", icon: Mic, group: "Senses" },
+  { id: "connectors", label: "Links", icon: Boxes, group: "Senses" },
+  { id: "lab", label: "Lab", icon: Sparkles, group: "System" },
+  { id: "settings", label: "Settings", icon: Settings, group: "System" },
+];
+
 function AppShell() {
+  const { connected, status, brainState, busy } = useNexora();
   const initialTab = typeof window !== "undefined" ? window.location.hash.replace("#", "") || "dashboard" : "dashboard";
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [commandSearchOpen, setCommandSearchOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (window.location.hash.replace("#", "") !== activeTab) {
       window.history.replaceState(null, "", `#${activeTab}`);
     }
   }, [activeTab]);
+
+  const activeNav = EXPERIENCE_NAV.find((item) => item.id === activeTab) ?? EXPERIENCE_NAV[0];
+  const ActiveIcon = activeNav.icon;
+
+  const navigate = (tab: string) => {
+    setActiveTab(tab);
+    setCommandSearchOpen(false);
+    setNavOpen(false);
+  };
 
   const renderTab = () => {
     switch (activeTab) {
@@ -81,96 +130,135 @@ function AppShell() {
   };
 
   return (
-    <div className="g-os-shell w-full h-screen text-slate-100 overflow-hidden flex flex-col font-sans relative">
-      {/* 3D Background Scene */}
+    <div className="g2-os-shell">
       <Scene3D />
 
-      {/* Top Header Bar */}
-      <TopBar
-        activeTab={activeTab}
-        rightPanelOpen={rightPanelOpen}
-        setRightPanelOpen={setRightPanelOpen}
-        onOpenCommandSearch={() => setCommandSearchOpen(true)}
-      />
-
-      {/* Main 3-Column Layout */}
-      <div className="g-workbench flex-1 flex min-h-0 relative overflow-hidden pointer-events-none">
-        {/* Left Column: Navigation Sidebar */}
-        <div className="pointer-events-auto">
-          <Sidebar
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            collapsed={sidebarCollapsed}
-            setCollapsed={setSidebarCollapsed}
-          />
+      <header className="g2-command-strip">
+        <button className="g2-round-button" onClick={() => setNavOpen((value) => !value)} aria-label="Open navigation">
+          {navOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        </button>
+        <div className="g2-identity">
+          <span>G</span>
+          <div>
+            <strong>NEXORA</strong>
+            <small>{brainState?.current_goal || "Personal cognitive operating layer"}</small>
+          </div>
         </div>
+        <button className="g2-search-trigger" onClick={() => setCommandSearchOpen(true)}>
+          <Search className="h-4 w-4" />
+          Ask, jump, or open a lens
+          <kbd>⌘K</kbd>
+        </button>
+        <div className="g2-system-pills">
+          <span className={connected ? "online" : "offline"}>
+            <Activity className="h-3.5 w-3.5" />
+            {connected ? "Live" : "Offline"}
+          </span>
+          <span>{busy ? "Thinking" : "Ready"}</span>
+          <button onClick={() => setRightPanelOpen((value) => !value)} aria-label="Toggle system context">
+            <PanelRight className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
 
-        {/* Center Column: Workspace View */}
-        <main className="g-main-surface flex-1 flex flex-col min-w-0 relative overflow-hidden pointer-events-auto">
+      <div className={`g2-lens-map ${navOpen ? "open" : ""}`} aria-hidden={!navOpen}>
+        {["Start", "Create", "Core", "Build", "Senses", "System"].map((group) => (
+          <section key={group}>
+            <p>{group}</p>
+            <div>
+              {EXPERIENCE_NAV.filter((item) => item.group === group).map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate(item.id)}
+                    className={activeTab === item.id ? "active" : ""}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <section className="g2-stage">
+        <aside className="g2-left-rail">
+          <div className="g2-orbital-status">
+            <ActiveIcon className="h-5 w-5" />
+            <span>{activeNav.group}</span>
+            <strong>{activeNav.label}</strong>
+          </div>
+          <div className="g2-runtime-card">
+            <small>Runtime</small>
+            <strong>{connected ? "Connected" : "Local backend offline"}</strong>
+            <span>CPU {Math.round(status?.cpu ?? 0)} · RAM {Math.round(status?.ram ?? 0)}</span>
+          </div>
+        </aside>
+
+        <main className="g2-workspace">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="flex-1 flex flex-col overflow-hidden h-full"
+              initial={{ opacity: 0, scale: 0.985, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.99, y: -8 }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
+              className="g2-page-mount"
             >
               {renderTab()}
             </motion.div>
           </AnimatePresence>
         </main>
 
-        {/* Right Column: Context Panel */}
-        <div className="pointer-events-auto">
+        <aside className={`g2-context-drawer ${rightPanelOpen ? "open" : ""}`}>
           <RightPanel open={rightPanelOpen} />
-        </div>
-      </div>
+        </aside>
+      </section>
 
-      {/* Command Search Modal (Cmd+K) */}
+      <nav className="g2-floating-dock" aria-label="Primary lens navigation">
+        {EXPERIENCE_NAV.slice(0, 10).map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.id)}
+              className={activeTab === item.id ? "active" : ""}
+              aria-label={item.label}
+              title={item.label}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       {commandSearchOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="w-full max-w-xl bg-[#0d1322] border border-slate-700 rounded-xl shadow-2xl overflow-hidden font-mono text-xs">
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-              <span className="text-slate-300 font-semibold uppercase">Command Palette</span>
+        <div className="g2-command-modal">
+          <div className="g2-command-card">
+            <div>
+              <span><Command className="h-4 w-4" /> Lens switcher</span>
               <button
                 onClick={() => setCommandSearchOpen(false)}
-                className="text-slate-500 hover:text-slate-300 px-2 py-0.5 rounded"
+                aria-label="Close command palette"
               >
-                ESC
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="p-3 space-y-1">
-              <button
-                onClick={() => {
-                  setActiveTab("chat");
-                  setCommandSearchOpen(false);
-                }}
-                className="w-full text-left p-2.5 rounded hover:bg-slate-800/80 text-slate-300 flex items-center justify-between"
-              >
-                <span>Open Chat Workspace</span>
-                <span className="text-[10px] text-slate-500">Navigation</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("knowledge");
-                  setCommandSearchOpen(false);
-                }}
-                className="w-full text-left p-2.5 rounded hover:bg-slate-800/80 text-slate-300 flex items-center justify-between"
-              >
-                <span>Search Knowledge Base</span>
-                <span className="text-[10px] text-slate-500">Navigation</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("memory");
-                  setCommandSearchOpen(false);
-                }}
-                className="w-full text-left p-2.5 rounded hover:bg-slate-800/80 text-slate-300 flex items-center justify-between"
-              >
-                <span>Open Memory DB</span>
-                <span className="text-[10px] text-slate-500">Navigation</span>
-              </button>
+            <div className="g2-command-grid">
+              {EXPERIENCE_NAV.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button key={item.id} onClick={() => navigate(item.id)}>
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                    <small>{item.group}</small>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
