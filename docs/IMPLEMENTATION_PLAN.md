@@ -92,7 +92,7 @@ Acceptance tests:
 
 Priority: High
 
-1. Replace hardcoded VisionPage URLs with `nexoraApi` methods.
+1. DONE: Replace hardcoded VisionPage URLs with `nexoraApi` methods and add a source-contract regression test.
 2. Remove UI controls that call placeholder backend flows or display unavailable state.
 3. Add real degraded/unavailable indicators for:
    - Central Brain missing
@@ -105,7 +105,7 @@ Priority: High
 Acceptance tests:
 
 - Every nav page loads real backend data.
-- No page depends on hardcoded localhost except central API config.
+- DONE: No page depends on hardcoded localhost except central API config, covered by `test_frontend_api_contract.py`.
 - No fake activity/random status values.
 
 ## Phase 6: Build Minimal Central Brain On Existing Systems

@@ -41,6 +41,19 @@ Generated: 2026-09-21
     - workflow notifications publish real event-bus events
     - API smoke routes still respond
 
+- `python -m pytest nexora_os/tests/test_frontend_api_contract.py -q`
+  - Result: PASS
+  - Output: `3 passed`
+  - Coverage:
+    - frontend pages do not hardcode the dev API origin
+    - the central API client owns the `VITE_NEXORA_API` / dev-origin fallback
+    - VisionPage uses `nexoraApi` for camera, OCR, screen, gesture, and mouse-control actions
+
+- `npm run build` from repository root
+  - Result: EXPECTED NON-SUCCESS
+  - Output: `Missing script: "build"`
+  - Note: the active frontend package is `nexora_os/frontend`; root has no package build script.
+
 - `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_integration_workflow.py`
   - Result: PASS
   - Output: `Passed: 6/6`, `Failed: 0/6`, `Success Rate: 100.0%`
@@ -72,6 +85,7 @@ Generated: 2026-09-21
 - AI Lab creation behavior is now test-covered through explicit policy instead of a vague disabled path.
 - The backend module surface can import and initialize across the major subsystems when Windows output encoding is set correctly.
 - Workflow execution no longer reports standalone capability-node success without a registered executor; executor-backed node outputs and notification events are regression-tested.
+- Vision UI calls are routed through the central frontend API client instead of page-level localhost fetches.
 - Pet G has a reproducible Blender workflow and a repository-root launcher; the previous raw `blender` command failure is handled by project tooling.
 
 ## What This Does Not Prove

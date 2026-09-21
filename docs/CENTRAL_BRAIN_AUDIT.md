@@ -12,7 +12,7 @@ The most important findings:
 
 - Identity drift: the requested Jarvis system currently exists as `nexora_os`, `NEXORA_*` launchers, and NEXORA branding.
 - Core startup/shutdown works at a basic level, but async event delivery is broken in direct subscriber verification.
-- The official UI builds and connects to many backend endpoints, but some page calls are hardcoded to `http://127.0.0.1:7474`.
+- The official UI builds and connects to many backend endpoints. Earlier VisionPage hardcoded localhost API calls have been replaced with the central API client; other UI capability backing still requires ongoing verification.
 - There is no `backend/brain/` package, no cognitive loop, no persistent goal manager, no capability registry, no model router, no tool router, no verifier, and no reflection engine.
 - Workflow execution now inspects executor return values and rejects capability nodes without a runtime executor; broader node-by-node side-effect verification is still incomplete.
 - Agent runtime exposes two `AutonomousAgent` health rows and no real `PlannerAgent` class, while tests import `PlannerAgent` and fail collection.
@@ -45,7 +45,7 @@ The most important findings:
 
 | Subsystem | Classification | Notes |
 | --- | --- | --- |
-| Command Center UI | PARTIALLY WORKING | Builds and uses backend state, but not all controls are backed by real capability and VisionPage has hardcoded API URLs. |
+| Command Center UI | PARTIALLY WORKING | Builds and uses backend state, and VisionPage now uses the central API client; not all controls are fully proven against real capability side effects. |
 | Native Windows wrapper | PARTIALLY WORKING | `desktop_app.py` wraps local web UI in PySide6. It is a desktop shell over web tech, not a fully native UI. |
 | One-click launcher | PARTIALLY WORKING | Checks deps and launches app, but still uses NEXORA naming and external installers/downloads. |
 | FastAPI API layer | WORKING | Core REST endpoints respond in TestClient. |

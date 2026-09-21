@@ -109,7 +109,7 @@ Audit date: 2026-07-10
 | Home | PARTIALLY WORKING | Shared status/modules/events/memory |
 | Brain | PLACEHOLDER/PARTIAL | Shows activity/agent steps, but no real central brain state |
 | Voice | PARTIALLY WORKING | `/voice/status`, `/voice/listen`, `/voice/speak` |
-| Vision | PARTIALLY WORKING | `/vision/status`, `/vision/frame`, `/vision/screen`; some hardcoded URLs |
+| Vision | PARTIALLY WORKING | `/vision/status`, `/vision/frame`, `/vision/screen`; frontend now routes through central API client, but live hardware/object-detection acceptance remains separate |
 | Agents | PARTIALLY WORKING | `/agents`, `/agents/{name}/tasks`; planner mismatch |
 | Workflows | PARTIALLY WORKING | graph CRUD/run/trace |
 | Automation | PARTIALLY WORKING | `/automation`, `/automation/run` |
