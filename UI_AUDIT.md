@@ -28,6 +28,10 @@ Generated: 2026-09-21
 - Settings: `SettingsPage.tsx`
 - Companion: `CompanionPage.tsx`
 - Pet G: `PetGPage.tsx`
+- Learning: `LearningPage.tsx`
+- MCP center: `MCPPage.tsx`
+- Plugin center: `PluginsPage.tsx`
+- Security: `SecurityPage.tsx`
 
 ## Useful Components To Preserve
 
@@ -48,6 +52,7 @@ Generated: 2026-09-21
 - Core/system: `GET /status`, `/health`, `/state`, `/events`, `/settings`
 - Brain/cognition: `GET /brain/status`, `/cognition/status`, `POST /cognition/perceive`
 - Capabilities/security: `GET /capabilities`, `/security/status`, `POST /security/emergency-stop`, `/security/emergency-stop/clear`
+- Security audit: `GET /security/audit`
 - Agents/AI Lab: `GET /agents`, `/tools`, `/agents/generated`, `/ai_lab/status`, `POST /agents/{name}/tasks`, `/agents/build`, `/ai_lab/validate`
 - Memory: `GET /memory`, `/memory/search`, `/memory/network`, `/memory/episodes`, `/memory/procedures`, `POST /memory/store`, `/memory/reflect`, `/memory/episodes`, `/memory/procedures`, `/memory/procedures/{id}/score`
 - Knowledge/learning: `GET /knowledge`, `/knowledge/search`, `/knowledge/graph`, `/learning/jobs`, `/learning/jobs/{id}`, `POST /knowledge/learn/{domain}`, `/knowledge/index`, `/learning/jobs`
@@ -55,6 +60,7 @@ Generated: 2026-09-21
 - Voice: `GET /voice/status`, `POST /voice/listen`, `/voice/speak`
 - Vision: `GET /vision/status`, `/vision/mouse/state`, `/vision/gestures/state`, `POST /vision/webcam/start`, `/vision/webcam/stop`, `/vision/capture`, `/vision/frame`, `/vision/frame/mouse`, `/vision/mouse/enable`, `/vision/mouse/disable`, `/vision/screen`, `/vision/gestures/enable`, `/vision/gestures/disable`, `/vision/gestures/capture`
 - Automation/connectors/computer control: `GET /automation`, `/connectors`, `POST /automation/run`, `/connectors/{name}/execute`
+- MCP/plugin: `GET /mcp/status`, `/mcp/tools`, `/plugins`
 - Realtime/companion: `GET /realtime/livekit/status`, `/companion/status`, `POST /realtime/livekit/token`, `/companion/pair`, `/companion/sync`
 - WebSocket: `/ws/events`
 
@@ -79,9 +85,9 @@ The backend publishes real event topics including:
 
 ## Missing Connections / Gaps
 
-- MCP center has backend manager events, but no full dedicated frontend MCP management page yet.
-- Plugin center is not yet a distinct production lens; connector/plugin truth must come from installed backend/plugin state rather than static categories.
-- Security UI exists through endpoints, but needs a richer permission/audit lens.
+- MCP center now has a dedicated read-only frontend lens; connect/disconnect/test actions still need a safe backend mutation contract.
+- Plugin center now has a dedicated truthful lens; a real plugin registry is still not exposed by the backend.
+- Security UI now has a dedicated lens for health, emergency stop, and audit entries; richer permission prompts still need product flow integration.
 - Computer-control visualization is partially represented through connectors/automation and vision mouse endpoints; it needs a chronological action timeline.
 - G Core previously inferred state from generic busy/voice values. It now has a `GCoreState` mapped from real WebSocket topics, but page-level labels should continue migrating to that state.
 - Frontend package has no `lint` or `test` scripts yet, so the requested `npm run lint` and `npm test` gates cannot run until scripts/tooling are added.

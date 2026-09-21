@@ -286,6 +286,11 @@ async def security_status() -> dict[str, Any]:
     return {"emergency_stop": runtime.security.emergency_stop_active, "health": runtime.security.health()}
 
 
+@app.get("/security/audit")
+async def security_audit(limit: int = 50) -> dict[str, Any]:
+    return {"items": runtime.security.get_recent_audits(min(max(limit, 1), 100))}
+
+
 @app.post("/security/emergency-stop")
 async def security_emergency_stop(request: EmergencyStopRequest) -> dict[str, Any]:
     return runtime.security.emergency_stop(request.reason)
@@ -328,6 +333,46 @@ async def knowledge_index(request: KnowledgeIndexRequest) -> dict[str, Any]:
 @app.get("/learning/jobs")
 async def learning_jobs(limit: int = 20) -> dict[str, Any]:
     return {"status": runtime.learning.status(), "jobs": runtime.learning.list_jobs(limit)}
+
+
+@app.get("/mcp/status")
+async def mcp_status() -> dict[str, Any]:
+    return runtime.mcp.health()
+
+
+@app.get("/mcp/tools")
+async def mcp_tools() -> dict[str, Any]:
+    return {"tools": runtime.mcp.get_all_tools()}
+
+
+@app.get("/plugins")
+async def plugins() -> dict[str, Any]:
+    """Truthful plugin surface.
+
+    The local runtime currently exposes connector/capability integrations, not a
+    separate installed-plugin registry. The frontend must show that distinction
+    rather than inventing installed plugins.
+    """
+    connector_registry = getattr(runtime, "connector_registry", None)
+    connectors_data: dict[str, Any]
+    if connector_registry:
+        manifest = connector_registry.manifest()
+        connectors_data = {
+            "connectors": [
+                {"name": name, "health": info["health"], "capabilities": info["capabilities"]}
+                for name, info in manifest.items()
+            ],
+            "available": len(connector_registry.available_connectors()),
+        }
+    else:
+        connectors_data = await connectors()
+    return {
+        "registry_available": False,
+        "plugins": [],
+        "message": "No dedicated local plugin registry is exposed by this runtime.",
+        "connectors": connectors_data.get("connectors", []),
+        "capabilities": runtime.capabilities.discover_capabilities(),
+    }
 
 
 @app.post("/learning/jobs")

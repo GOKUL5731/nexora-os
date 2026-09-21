@@ -165,6 +165,13 @@ export const nexoraApi = {
       method: "POST",
       body: JSON.stringify({ domain, title, content, source, tags }),
     }),
+  learningJobs: (limit = 20) =>
+    request<{ status: Record<string, unknown>; jobs: LearningJob[] }>(`/learning/jobs?limit=${limit}`),
+  learningStart: (domain: string, goal = "", resources: Array<Record<string, unknown>> = [], expected_terms: string[] = []) =>
+    request<Record<string, unknown>>("/learning/jobs", {
+      method: "POST",
+      body: JSON.stringify({ domain, goal, resources, expected_terms }),
+    }),
 
   agentTask: (name: string, task: Record<string, unknown>) =>
     request<Record<string, unknown>>(`/agents/${encodeURIComponent(name)}/tasks`, {
@@ -177,6 +184,17 @@ export const nexoraApi = {
       method: "POST",
       body: JSON.stringify({ input, context: {} }),
     }),
+  securityStatus: () => request<SecurityStatus>("/security/status"),
+  securityAudit: (limit = 50) => request<{ items: SecurityAuditItem[] }>(`/security/audit?limit=${limit}`),
+  securityEmergencyStop: (reason = "user_requested") =>
+    request<Record<string, unknown>>("/security/emergency-stop", {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  securityEmergencyClear: () => request<Record<string, unknown>>("/security/emergency-stop/clear", { method: "POST" }),
+  mcpStatus: () => request<Record<string, unknown>>("/mcp/status"),
+  mcpTools: () => request<{ tools: MCPTool[] }>("/mcp/tools"),
+  plugins: () => request<PluginRegistryStatus>("/plugins"),
   settings: () => request<Record<string, unknown>>("/settings"),
   voiceStatus: () => request<Record<string, unknown>>("/voice/status"),
   livekitStatus: () => request<Record<string, unknown>>("/realtime/livekit/status"),
@@ -237,6 +255,42 @@ export type KnowledgeHit = {
   source: string;
   score?: number;
   tags?: string[];
+};
+export type LearningJob = {
+  id: number;
+  domain: string;
+  goal: string;
+  status: string;
+  resources: Array<Record<string, unknown>>;
+  expected_terms: string[];
+  result: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+  completed_at?: number | null;
+};
+export type SecurityStatus = {
+  emergency_stop: boolean;
+  health: Record<string, unknown>;
+};
+export type SecurityAuditItem = {
+  timestamp: number;
+  ip: string;
+  endpoint: string;
+  method: string;
+  status: number;
+};
+export type MCPTool = {
+  name?: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  _server?: string;
+};
+export type PluginRegistryStatus = {
+  registry_available: boolean;
+  plugins: Array<Record<string, unknown>>;
+  message: string;
+  connectors: Array<{ name: string; health: string; capabilities: string[] }>;
+  capabilities: Array<Record<string, unknown>>;
 };
 export type CognitionStatus = {
   identity?: { name?: string; role?: string; truthfulness_rules?: string[]; conversation_style?: string[] };

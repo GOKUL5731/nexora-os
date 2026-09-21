@@ -19,11 +19,16 @@ import { LabPage } from "./components/pages/LabPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
 import { CompanionPage } from "./components/pages/CompanionPage";
 import { PetGPage } from "./components/pages/PetGPage";
+import { SecurityPage } from "./components/pages/SecurityPage";
+import { MCPPage } from "./components/pages/MCPPage";
+import { LearningPage } from "./components/pages/LearningPage";
+import { PluginsPage } from "./components/pages/PluginsPage";
 
 import { motion, AnimatePresence } from "motion/react";
 import {
   Activity,
   Bot,
+  BookOpenCheck,
   Brain,
   Boxes,
   Command,
@@ -35,8 +40,10 @@ import {
   Mic,
   Network,
   PanelRight,
+  PlugZap,
   Search,
   Settings,
+  Shield,
   Sparkles,
   Telescope,
   Video,
@@ -60,6 +67,10 @@ const EXPERIENCE_NAV = [
   { id: "vision", label: "Vision", icon: Video, group: "Senses" },
   { id: "voice", label: "Voice", icon: Mic, group: "Senses" },
   { id: "connectors", label: "Links", icon: Boxes, group: "Senses" },
+  { id: "learning", label: "Learn", icon: BookOpenCheck, group: "System" },
+  { id: "mcp", label: "MCP", icon: PlugZap, group: "System" },
+  { id: "plugins", label: "Plugins", icon: Boxes, group: "System" },
+  { id: "security", label: "Security", icon: Shield, group: "System" },
   { id: "lab", label: "Lab", icon: Sparkles, group: "System" },
   { id: "settings", label: "Settings", icon: Settings, group: "System" },
 ];
@@ -116,6 +127,14 @@ function AppShell() {
         return <VoicePage />;
       case "connectors":
         return <ConnectorsPage />;
+      case "learning":
+        return <LearningPage />;
+      case "mcp":
+        return <MCPPage />;
+      case "plugins":
+        return <PluginsPage />;
+      case "security":
+        return <SecurityPage />;
       case "lab":
         return <LabPage />;
       case "settings":

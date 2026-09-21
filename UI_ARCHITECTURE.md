@@ -86,11 +86,12 @@ G
   - Pet G page/model package
   - workflow studio
   - memory/knowledge/voice/vision/agents/automation/connectors/settings/lab pages
+  - Learning lens backed by `/learning/jobs`
+  - MCP lens backed by `/mcp/status` and `/mcp/tools`
+  - Plugin lens backed by `/plugins` with truthful "registry unavailable" state
+  - Security lens backed by `/security/status`, `/security/audit`, and emergency-stop controls
   - `GCoreState` event mapping from backend topics
 - Needs follow-up:
-  - dedicated MCP center
-  - dedicated plugin center
-  - security/permission lens
   - developer event/log lens
   - computer-control timeline
   - reduced-motion control for WebGL/heavy effects

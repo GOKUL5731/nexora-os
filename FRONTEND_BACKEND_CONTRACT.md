@@ -95,8 +95,11 @@ UI consumer: `NexoraProvider`.
 | Connectors | `GET` | `/connectors` | none | connector health/capabilities |
 | Connector action | `POST` | `/connectors/{name}/execute` | `{ input, context }` | connector result |
 | Security | `GET` | `/security/status` | none | emergency stop and health |
+| Security audit | `GET` | `/security/audit` | `limit` | recent audited API requests |
 | Security | `POST` | `/security/emergency-stop`, `/security/emergency-stop/clear` | reason / none | security state |
-| MCP center | backend events currently include `mcp.server_connected`; dedicated HTTP center still needs a finalized API contract |
+| MCP center | `GET` | `/mcp/status` | none | MCP manager health, connected server count, total tool count |
+| MCP center | `GET` | `/mcp/tools` | none | connected MCP tool schemas |
+| Plugin center | `GET` | `/plugins` | none | truthful plugin registry state, connector-backed ecosystem, capability registry |
 | Companion | `GET` | `/companion/status` | none | paired devices and desktop status |
 | Companion | `POST` | `/companion/pair`, `/companion/sync` | device/sync payload | pair/sync result |
 
