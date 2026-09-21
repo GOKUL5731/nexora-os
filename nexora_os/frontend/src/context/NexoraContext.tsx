@@ -13,6 +13,22 @@ type WorkflowRow = { name: string; enabled: boolean; last_status?: string; step_
 type MemoryItem = { summary?: string; content?: string };
 type BusEvent = { topic: string; payload: unknown; sequence: number };
 type ModuleRow = { name: string; status: string; detail?: string };
+export type GCoreState =
+  | "OFFLINE"
+  | "STARTING"
+  | "IDLE"
+  | "LISTENING"
+  | "UNDERSTANDING"
+  | "THINKING"
+  | "PLANNING"
+  | "EXECUTING"
+  | "OBSERVING"
+  | "VERIFYING"
+  | "SPEAKING"
+  | "LEARNING"
+  | "VISION"
+  | "ERROR"
+  | "SUCCESS";
 export type AgentStep = { step: number; thought: string; action: string; params: Record<string, unknown>; timestamp: number };
 type BrainState = {
   stage?: string;
@@ -44,6 +60,7 @@ type NexoraContextValue = {
   pendingQuestion: string | null;
   brainState: BrainState | null;
   cognitionState: CognitionStatus | null;
+  gCoreState: GCoreState;
   sendCommand: (text: string, context?: Record<string, unknown>) => Promise<ProcessResult | null>;
   confirmPending: (yes: boolean) => Promise<void>;
   startVoice: () => Promise<void>;
@@ -54,6 +71,71 @@ type NexoraContextValue = {
 };
 
 const NexoraContext = createContext<NexoraContextValue | null>(null);
+
+const BRAIN_STAGE_TO_CORE: Record<string, GCoreState> = {
+  INTAKE: "UNDERSTANDING",
+  PLAN: "PLANNING",
+  EXECUTE: "EXECUTING",
+  VERIFY: "VERIFYING",
+  REFLECT: "LEARNING",
+  COMPLETE: "SUCCESS",
+  FAILED: "ERROR",
+  IDLE: "IDLE",
+};
+
+function normalizeBrainStage(stage?: string): GCoreState | null {
+  if (!stage) return null;
+  const normalized = stage.trim().toUpperCase();
+  return BRAIN_STAGE_TO_CORE[normalized] ?? null;
+}
+
+function deriveGCoreStateFromEvent(topic: string, payload: unknown): GCoreState | null {
+  if (topic.startsWith("security.") || topic.endsWith(".failed") || topic.endsWith(".error") || topic === "voice.error") {
+    return "ERROR";
+  }
+  if (topic === "runtime.started" || topic === "system.boot.started") return "STARTING";
+  if (topic === "runtime.response") return "SUCCESS";
+  if (topic === "voice.listening_started" || topic === "voice.activity") return "LISTENING";
+  if (topic === "voice.utterance" || topic === "voice.transcript") return "UNDERSTANDING";
+  if (topic === "voice.tts_started" || topic === "voice.tts_chunk" || topic === "voice.status") {
+    const status = payload && typeof payload === "object" ? String((payload as Record<string, unknown>).status ?? "") : "";
+    return status.toLowerCase() === "speaking" || topic !== "voice.status" ? "SPEAKING" : null;
+  }
+  if (topic === "vision.updated" || topic.startsWith("state.vision")) return "VISION";
+  if (topic.startsWith("learning.") || topic === "knowledge.domain.learned" || topic.startsWith("memory.")) return "LEARNING";
+  if (topic === "agent.started" || topic === "agent.step" || topic.startsWith("step.") || topic.startsWith("automation.")) return "EXECUTING";
+  if (topic.startsWith("workflow.")) return topic.endsWith(".completed") ? "SUCCESS" : "EXECUTING";
+  if (topic === "brain.state.changed") {
+    const stage = payload && typeof payload === "object" ? String((payload as Record<string, unknown>).stage ?? "") : "";
+    return normalizeBrainStage(stage);
+  }
+  if (topic === "cognition.context.built" || topic === "brain.decision") return "THINKING";
+  if (topic === "cognition.self_monitor") return "VERIFYING";
+  return null;
+}
+
+function deriveGCoreState(options: {
+  connected: boolean;
+  busy: boolean;
+  voiceState?: string;
+  brainStage?: string;
+  events?: BusEvent[];
+}): GCoreState {
+  if (!options.connected) return "OFFLINE";
+  const voice = (options.voiceState ?? "").toLowerCase();
+  if (voice.includes("listen")) return "LISTENING";
+  if (voice.includes("speak")) return "SPEAKING";
+  if (options.events?.length) {
+    for (let index = options.events.length - 1; index >= 0; index -= 1) {
+      const mapped = deriveGCoreStateFromEvent(options.events[index].topic, options.events[index].payload);
+      if (mapped) return mapped;
+    }
+  }
+  const brainMapped = normalizeBrainStage(options.brainStage);
+  if (brainMapped && brainMapped !== "IDLE") return brainMapped;
+  if (options.busy) return "THINKING";
+  return "IDLE";
+}
 
 export function NexoraProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
@@ -73,6 +155,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [brainState, setBrainState] = useState<BrainState | null>(null);
   const [cognitionState, setCognitionState] = useState<CognitionStatus | null>(null);
+  const [gCoreState, setGCoreState] = useState<GCoreState>("OFFLINE");
 
   const refreshMemory = useCallback(async (query = "") => {
     try {
@@ -100,6 +183,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       ws.onopen = () => {
         console.log("[NexoraWebSocket] Connected.");
         setConnected(true);
+        setGCoreState("STARTING");
         setError(null);
         refreshMemory();
       };
@@ -175,6 +259,15 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
               return unique.slice(-60);
             });
           }
+          setGCoreState(
+            deriveGCoreState({
+              connected: true,
+              busy,
+              voiceState: data.status?.voice_state ?? voiceState,
+              brainStage: data.state?.brain?.stage ?? brainState?.stage,
+              events: data.events ?? [],
+            }),
+          );
         } catch (e) {
           console.error("[NexoraWebSocket] Message parsing error:", e);
         }
@@ -184,6 +277,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
         console.warn(`[NexoraWebSocket] Disconnected: code=${event.code}, reason=${event.reason}. Retrying in 3s...`);
         setConnected(false);
+        setGCoreState("OFFLINE");
         setError("Connection lost. Reconnecting...");
         reconnectTimeout = window.setTimeout(connect, 3000);
       };
@@ -214,6 +308,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       setAgentSteps([]);  // Clear previous steps on new command
       setPendingQuestion(null);
+      setGCoreState("UNDERSTANDING");
       try {
         const result = await nexoraApi.process(text.trim(), {
           ...context,
@@ -225,12 +320,14 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
         } else {
           setPendingTaskId(null);
           setLastMessage(result.message ?? "Done.");
+          setGCoreState(result.type === "success" ? "SUCCESS" : "IDLE");
         }
         return result;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Command failed";
         setError(msg);
         setLastMessage(msg);
+        setGCoreState("ERROR");
         return null;
       } finally {
         setBusy(false);
@@ -300,6 +397,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       pendingQuestion,
       brainState,
       cognitionState,
+      gCoreState,
       sendCommand,
       confirmPending,
       startVoice,
@@ -326,6 +424,7 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       pendingQuestion,
       brainState,
       cognitionState,
+      gCoreState,
       sendCommand,
       confirmPending,
       startVoice,

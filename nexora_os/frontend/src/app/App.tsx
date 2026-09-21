@@ -65,7 +65,7 @@ const EXPERIENCE_NAV = [
 ];
 
 function AppShell() {
-  const { connected, status, brainState, busy } = useNexora();
+  const { connected, status, brainState, busy, gCoreState } = useNexora();
   const initialTab = typeof window !== "undefined" ? window.location.hash.replace("#", "") || "dashboard" : "dashboard";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -154,7 +154,7 @@ function AppShell() {
             <Activity className="h-3.5 w-3.5" />
             {connected ? "Live" : "Offline"}
           </span>
-          <span>{busy ? "Thinking" : "Ready"}</span>
+          <span>{connected ? gCoreState : busy ? "THINKING" : "READY"}</span>
           <button onClick={() => setRightPanelOpen((value) => !value)} aria-label="Toggle system context">
             <PanelRight className="h-4 w-4" />
           </button>
