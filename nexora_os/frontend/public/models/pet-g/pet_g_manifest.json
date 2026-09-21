@@ -1,0 +1,20 @@
+{
+  "name": "Pet G",
+  "source": "procedural",
+  "authoring": {
+    "fallback_obj": "pet_g.obj",
+    "blender_generator": "make_pet_g_blender.py",
+    "intended_blender_outputs": [
+      "pet_g.blend",
+      "pet_g.glb",
+      "pet_g_preview.png"
+    ]
+  },
+  "style": "small friendly graphite robot companion with glowing cyan eyes and amber G chest mark",
+  "scale_meters": {
+    "height": 3.25,
+    "width": 2.1,
+    "depth": 1.1
+  },
+  "runtime_notes": "Use pet_g.glb from Blender when available; pet_g.obj is a non-animated fallback mesh."
+}

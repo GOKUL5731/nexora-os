@@ -1,0 +1,14 @@
+newmtl body_graphite
+Kd 0.055 0.063 0.075
+Ks 0.5 0.5 0.5
+Ns 120
+newmtl metal_trim
+Kd 0.36 0.40 0.44
+Ks 0.8 0.8 0.8
+Ns 180
+newmtl eye_glow
+Kd 0.24 0.86 1.0
+Ke 0.12 0.55 0.8
+newmtl amber_mark
+Kd 1.0 0.62 0.12
+Ke 0.65 0.28 0.02
