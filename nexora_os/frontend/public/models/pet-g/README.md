@@ -20,10 +20,28 @@ From this folder:
 blender --background --python make_pet_g_blender.py
 ```
 
+On Windows, the easiest command is:
+
+```powershell
+.\run_pet_g_blender.ps1
+```
+
 If Blender is not in `PATH`, use the full Blender executable path:
 
 ```powershell
 & "C:\Program Files\Blender Foundation\Blender 4.2\blender.exe" --background --python make_pet_g_blender.py
+```
+
+Or pass the path to the helper:
+
+```powershell
+.\run_pet_g_blender.ps1 -BlenderPath "C:\Program Files\Blender Foundation\Blender 4.2\blender.exe"
+```
+
+If Blender is not installed:
+
+```powershell
+winget install --id BlenderFoundation.Blender -e
 ```
 
 ## Design
