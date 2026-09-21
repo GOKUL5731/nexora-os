@@ -14,16 +14,21 @@ This folder contains the Pet G companion model package.
 
 ## Generate with Blender
 
+Do not use the raw `blender --background ...` command unless Blender is already
+installed and available on your PATH. On Windows, use the local runner because it
+auto-detects common Blender install folders and prints a clear fix when Blender
+is missing.
+
 From this folder:
 
 ```powershell
-blender --background --python make_pet_g_blender.py
+.\run_pet_g_blender.ps1
 ```
 
-On Windows, the easiest command is:
+From the repository root:
 
-```powershell
-.\run_pet_g_blender.ps1
+```cmd
+create_pet_g_blender_model.cmd
 ```
 
 If Blender is not in `PATH`, use the full Blender executable path:
