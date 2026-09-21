@@ -15,7 +15,7 @@ The most important findings:
 - The official UI builds and connects to many backend endpoints. Earlier VisionPage hardcoded localhost API calls have been replaced with the central API client; other UI capability backing still requires ongoing verification.
 - There is no `backend/brain/` package, no cognitive loop, no persistent goal manager, no capability registry, no model router, no tool router, no verifier, and no reflection engine.
 - Workflow execution now inspects executor return values and rejects capability nodes without a runtime executor; broader node-by-node side-effect verification is still incomplete.
-- Agent runtime exposes two `AutonomousAgent` health rows and no real `PlannerAgent` class, while tests import `PlannerAgent` and fail collection.
+- Agent runtime now exposes four unique recovery agents and a real `PlannerAgent`; higher-risk autonomous/research/coding agents remain inactive until proven.
 - AI Lab agent generation is still exposed through `/agents/build`, and generated agent sandboxes exist.
 - Webcam and screen OCR were verified working on this machine; object detection is disconnected because the YOLO file is in root `models/` while vision code looks under `nexora_os/models/`.
 - TTS spoke successfully through `pyttsx3`; STT timed out because no speech was captured during the test window.
@@ -26,7 +26,7 @@ The most important findings:
 | --- | --- | --- |
 | Python compile | PASSED | `python -m compileall -q nexora_os\backend nexora_os\tests` |
 | Smoke tests | PASSED | `2 passed, 6 warnings` |
-| Full pytest collection | FAILED | `ImportError: cannot import name 'PlannerAgent'` |
+| Planner/agent contract | PASSED | `test_agent_contract.py` verifies real PlannerAgent, four active runtime agents, and inactive risky agents |
 | Frontend build | PASSED_WITH_WARNING | Vite built; JS chunk `529.20 kB` |
 | Import cycle scan | PASSED | 56 Python files, 0 parse errors, 0 cycles found |
 | Runtime startup | PASSED | startup verification `ok=True`, no required core modules missing |
@@ -60,13 +60,13 @@ The most important findings:
 | Goal manager | MISSING | No persistent goal state machine. |
 | Context manager | MISSING | No unified context scoring/budgeting/compression. |
 | Capability registry | MISSING | Capabilities are hardcoded in runtime branches and automation status. |
-| Planner | BROKEN | `PlannerAgent` is not a real class; runtime maps it to `AutonomousAgent`. |
+| Planner | WORKING/PARTIAL | `PlannerAgent` is a real class with bounded static fallback; full central-brain planning remains incomplete. |
 | Tool router | MISSING | No risk-aware tool selection layer. |
 | Model router | MISSING | Ollama client chooses first/default model, not by task capability. |
 | Verifier | MISSING | Workflow/API success often means no exception, not verified side effect. |
 | Reflection engine | MISSING | Memory reflection is a simple category summary, not task learning. |
 | Memory engine | PARTIALLY WORKING | Chunking, hashing embeddings, SQLite storage and retrieval work; no external/vector DB or retention policy. |
-| Agent runtime | PARTIALLY WORKING | Queues and delegates exist; naming/PlannerAgent/test mismatches remain. |
+| Agent runtime | PARTIALLY WORKING | Queues and delegates exist; four-agent recovery contract is tested, but richer supervision/permissions remain incomplete. |
 | Voice engine | PARTIALLY WORKING | Language detection and TTS work; STT timed out in live test; no full Mic -> STT -> NLP -> LLM -> TTS proof. |
 | Vision engine | PARTIALLY WORKING | Webcam, frame capture, screenshot, OCR work; object detection model path is disconnected. |
 | Workflow engine | PARTIALLY WORKING | Stores/runs graphs, records traces, fails unsupported/capability nodes without an executor, and supports runtime executor outputs; full side-effect verification remains incomplete. |
@@ -92,7 +92,7 @@ The most important findings:
 
 ## Broken Imports And Tests
 
-- `nexora_os/tests/test_agent_communication.py` imports `PlannerAgent`, but `nexora_os/backend/agents/runtime.py` no longer defines it.
+- `PlannerAgent` import mismatch is resolved by the real planner class and regression coverage.
 - Multiple test classes define `__init__`, so pytest warns that they are not collected as tests.
 - No circular imports were found by the local AST import scan.
 
@@ -104,7 +104,7 @@ The most important findings:
 - `/confirm` always returns "No pending confirmation."
 - `/nlp/process` reports route resolution only; it does not run a real NLP/LLM pipeline.
 - `AutomationEngine._launch_app()` can return success after invoking `start` without verifying process/application state.
-- `AutonomousAgent._execute_tool("write_file")` can write arbitrary files without central permission policy.
+- `AutonomousAgent._execute_tool("write_file")` can write arbitrary files without central permission policy, so `AutonomousAgent` remains inactive in the runtime registry.
 
 ## Do Not Delete Yet
 

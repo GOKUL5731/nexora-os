@@ -7,14 +7,14 @@ import sys
 from pathlib import Path
 
 # Change to backend directory and add it to path
-backend_dir = Path(__file__).parent.parent / "backend"
-os.chdir(str(backend_dir))
-sys.path.insert(0, str(backend_dir))
+repo_root = Path(__file__).resolve().parent.parent.parent
+os.chdir(str(repo_root))
+sys.path.insert(0, str(repo_root))
 
-from core.event_bus import EventBus
+from nexora_os.backend.core.event_bus import EventBus
 
 
-class TestBackendModules:
+class BackendModulesSuite:
     def __init__(self):
         self.results = []
         self.root = Path(__file__).parent.parent.parent
@@ -29,7 +29,7 @@ class TestBackendModules:
     def test_voice_engine_import(self):
         """Test voice engine can be imported"""
         try:
-            from voice.engine import VoiceEngine
+            from nexora_os.backend.voice.engine import VoiceEngine
             self.log_result("Voice Engine Import", True, "VoiceEngine imported successfully")
             return True
         except Exception as e:
@@ -39,7 +39,7 @@ class TestBackendModules:
     def test_voice_engine_initialization(self):
         """Test voice engine can be initialized"""
         try:
-            from voice.engine import VoiceEngine
+            from nexora_os.backend.voice.engine import VoiceEngine
             bus = EventBus()
             engine = VoiceEngine(bus)
             self.log_result("Voice Engine Initialization", True, "VoiceEngine initialized successfully")
@@ -51,7 +51,7 @@ class TestBackendModules:
     def test_voice_engine_health(self):
         """Test voice engine health check"""
         try:
-            from voice.engine import VoiceEngine
+            from nexora_os.backend.voice.engine import VoiceEngine
             bus = EventBus()
             engine = VoiceEngine(bus)
             health = engine.health()
@@ -68,7 +68,7 @@ class TestBackendModules:
     def test_vision_engine_import(self):
         """Test vision engine can be imported"""
         try:
-            from vision.engine import VisionEngine
+            from nexora_os.backend.vision.engine import VisionEngine
             self.log_result("Vision Engine Import", True, "VisionEngine imported successfully")
             return True
         except Exception as e:
@@ -78,7 +78,7 @@ class TestBackendModules:
     def test_vision_engine_initialization(self):
         """Test vision engine can be initialized"""
         try:
-            from vision.engine import VisionEngine
+            from nexora_os.backend.vision.engine import VisionEngine
             bus = EventBus()
             captures_path = self.root / "logs" / "captures"
             engine = VisionEngine(captures_path, bus)
@@ -91,7 +91,7 @@ class TestBackendModules:
     def test_vision_engine_health(self):
         """Test vision engine health check"""
         try:
-            from vision.engine import VisionEngine
+            from nexora_os.backend.vision.engine import VisionEngine
             bus = EventBus()
             captures_path = self.root / "logs" / "captures"
             engine = VisionEngine(captures_path, bus)
@@ -109,7 +109,7 @@ class TestBackendModules:
     def test_memory_engine_import(self):
         """Test memory engine can be imported"""
         try:
-            from memory.engine import MemoryEngine
+            from nexora_os.backend.memory.engine import MemoryEngine
             self.log_result("Memory Engine Import", True, "MemoryEngine imported successfully")
             return True
         except Exception as e:
@@ -119,7 +119,7 @@ class TestBackendModules:
     def test_memory_engine_initialization(self):
         """Test memory engine can be initialized"""
         try:
-            from memory.engine import MemoryEngine
+            from nexora_os.backend.memory.engine import MemoryEngine
             bus = EventBus()
             db_path = self.root / "databases" / "test_memory.db"
             engine = MemoryEngine(db_path, bus)
@@ -132,7 +132,7 @@ class TestBackendModules:
     def test_memory_engine_store(self):
         """Test memory engine can store chunks"""
         try:
-            from memory.engine import MemoryEngine
+            from nexora_os.backend.memory.engine import MemoryEngine
             bus = EventBus()
             db_path = self.root / "databases" / "test_memory.db"
             engine = MemoryEngine(db_path, bus)
@@ -150,7 +150,7 @@ class TestBackendModules:
     def test_memory_engine_search(self):
         """Test memory engine can search chunks"""
         try:
-            from memory.engine import MemoryEngine
+            from nexora_os.backend.memory.engine import MemoryEngine
             bus = EventBus()
             db_path = self.root / "databases" / "test_memory.db"
             engine = MemoryEngine(db_path, bus)
@@ -168,7 +168,7 @@ class TestBackendModules:
     def test_agents_runtime_import(self):
         """Test agents runtime can be imported"""
         try:
-            from agents.runtime import AgentRuntime, BaseAgent, PlannerAgent
+            from nexora_os.backend.agents.runtime import AgentRuntime, BaseAgent, PlannerAgent
             self.log_result("Agents Runtime Import", True, "AgentRuntime and agents imported successfully")
             return True
         except Exception as e:
@@ -178,8 +178,8 @@ class TestBackendModules:
     def test_agents_runtime_initialization(self):
         """Test agents runtime can be initialized"""
         try:
-            from agents.runtime import AgentRuntime
-            from memory.engine import MemoryEngine
+            from nexora_os.backend.agents.runtime import AgentRuntime
+            from nexora_os.backend.memory.engine import MemoryEngine
             bus = EventBus()
             db_path = self.root / "databases" / "test_memory.db"
             memory = MemoryEngine(db_path, bus)
@@ -203,7 +203,7 @@ class TestBackendModules:
     def test_automation_engine_import(self):
         """Test automation engine can be imported"""
         try:
-            from automation.engine import AutomationEngine
+            from nexora_os.backend.automation.engine import AutomationEngine
             self.log_result("Automation Engine Import", True, "AutomationEngine imported successfully")
             return True
         except Exception as e:
@@ -213,8 +213,8 @@ class TestBackendModules:
     def test_automation_engine_initialization(self):
         """Test automation engine can be initialized"""
         try:
-            from automation.engine import AutomationEngine
-            from vision.engine import VisionEngine
+            from nexora_os.backend.automation.engine import AutomationEngine
+            from nexora_os.backend.vision.engine import VisionEngine
             bus = EventBus()
             captures_path = self.root / "logs" / "captures"
             vision = VisionEngine(captures_path, bus)
@@ -228,8 +228,8 @@ class TestBackendModules:
     def test_automation_engine_status(self):
         """Test automation engine status"""
         try:
-            from automation.engine import AutomationEngine
-            from vision.engine import VisionEngine
+            from nexora_os.backend.automation.engine import AutomationEngine
+            from nexora_os.backend.vision.engine import VisionEngine
             bus = EventBus()
             captures_path = self.root / "logs" / "captures"
             vision = VisionEngine(captures_path, bus)
@@ -248,7 +248,7 @@ class TestBackendModules:
     def test_workflows_engine_import(self):
         """Test workflows engine can be imported"""
         try:
-            from workflows.engine import WorkflowEngine
+            from nexora_os.backend.workflows.engine import WorkflowEngine
             self.log_result("Workflows Engine Import", True, "WorkflowEngine imported successfully")
             return True
         except Exception as e:
@@ -258,7 +258,7 @@ class TestBackendModules:
     def test_workflows_engine_initialization(self):
         """Test workflows engine can be initialized"""
         try:
-            from workflows.engine import WorkflowEngine
+            from nexora_os.backend.workflows.engine import WorkflowEngine
             bus = EventBus()
             db_path = self.root / "databases" / "test_workflows.db"
             engine = WorkflowEngine(db_path, bus)
@@ -271,7 +271,7 @@ class TestBackendModules:
     def test_ai_lab_import(self):
         """Test AI lab can be imported"""
         try:
-            from ai_lab.agent_creator import AgentCreator
+            from nexora_os.backend.ai_lab.agent_creator import AgentCreator
             self.log_result("AI Lab Import", True, "AgentCreator imported successfully")
             return True
         except Exception as e:
@@ -281,7 +281,7 @@ class TestBackendModules:
     def test_ai_lab_initialization(self):
         """Test AI lab can be initialized"""
         try:
-            from ai_lab.agent_creator import AgentCreator
+            from nexora_os.backend.ai_lab.agent_creator import AgentCreator
             bus = EventBus()
             sandbox_path = self.root / "ai_lab_sandbox"
             registry_path = self.root / "databases" / "test_generated_agents.json"
@@ -295,7 +295,7 @@ class TestBackendModules:
     def test_api_import(self):
         """Test API app can be imported"""
         try:
-            from api.app import app
+            from nexora_os.backend.api.app import app
             self.log_result("API Import", True, "FastAPI app imported successfully")
             return True
         except Exception as e:
@@ -305,7 +305,7 @@ class TestBackendModules:
     def test_monitoring_import(self):
         """Test monitoring system can be imported"""
         try:
-            from monitoring.system_monitor import SystemMonitor
+            from nexora_os.backend.monitoring.system_monitor import SystemMonitor
             self.log_result("Monitoring Import", True, "SystemMonitor imported successfully")
             return True
         except Exception as e:
@@ -436,7 +436,7 @@ class TestBackendModules:
 
 
 def main():
-    tester = TestBackendModules()
+    tester = BackendModulesSuite()
     success = tester.run_all_tests()
     sys.exit(0 if success else 1)
 

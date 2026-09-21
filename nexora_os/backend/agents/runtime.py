@@ -100,13 +100,13 @@ class BaseAgent:
                     timeout=self._task_timeout
                 )
                 self.health.completed += 1
-                future.set_result({"task_id": task_id, "agent": self.name, **result})
+                self._set_future_result(future, {"task_id": task_id, "agent": self.name, **result})
                 self.bus.publish("agent.completed", {"agent": self.name, "task_id": task_id}, self.name)
             except asyncio.TimeoutError:
                 log.warning("%s task %s timed out after %d seconds", self.name, task_id, self._task_timeout)
                 self.health.failed += 1
                 self.health.last_error = f"Task timed out after {self._task_timeout} seconds"
-                future.set_result({
+                self._set_future_result(future, {
                     "task_id": task_id,
                     "agent": self.name,
                     "ok": False,
@@ -121,11 +121,16 @@ class BaseAgent:
                 log.exception("%s failed", self.name)
                 self.health.failed += 1
                 self.health.last_error = str(exc)
-                future.set_result({"task_id": task_id, "agent": self.name, "ok": False, "error": str(exc)})
+                self._set_future_result(future, {"task_id": task_id, "agent": self.name, "ok": False, "error": str(exc)})
                 self.bus.publish("agent.failed", {"agent": self.name, "task_id": task_id, "error": str(exc)}, self.name)
             finally:
                 self.health.status = "idle"
                 self.queue.task_done()
+
+    @staticmethod
+    def _set_future_result(future: asyncio.Future, result: dict[str, Any]) -> None:
+        if not future.done() and not future.cancelled():
+            future.set_result(result)
 
     async def execute(self, task: dict[str, Any], context: list[dict[str, Any]]) -> dict[str, Any]:
         return {"ok": True, "message": f"{self.name} accepted the task.", "context_count": len(context)}
@@ -171,7 +176,7 @@ Rules:
     MAX_STEPS = 15
 
     async def execute(self, task: dict[str, Any], context: list[dict[str, Any]]) -> dict[str, Any]:
-        from ..core.llm import OllamaClient
+        from ..staging.llm import OllamaClient
         import json as _json
         import re as _re
 
@@ -190,14 +195,19 @@ Rules:
         for step in range(1, self.MAX_STEPS + 1):
             # Build the current prompt with goal + all history
             history_text = "\n".join(history) if history else "No actions taken yet."
-            prompt = (
-                f"Goal: {goal}\n\n"
-                f"Action history:\n{history_text}\n\n"
-                f"What do you do next? Respond with JSON only."
-            )
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Goal: {goal}\n\n"
+                        f"Action history:\n{history_text}\n\n"
+                        f"What do you do next? Respond with JSON only."
+                    )
+                }
+            ]
 
             llm_result = await asyncio.to_thread(
-                llm.generate, prompt, self.SYSTEM_PROMPT, True
+                llm.chat, messages, self.SYSTEM_PROMPT, True
             )
 
             if not llm_result.get("ok"):
@@ -346,9 +356,77 @@ Rules:
         }
 
 
+class PlannerAgent(BaseAgent):
+    """LLM-powered planner that creates a structured execution plan.
+
+    Falls back to a static bounded plan when the LLM is offline.
+    """
+
+    SYSTEM_PROMPT = """You are a planning assistant. Given a user goal, respond with a JSON object:
+{
+  "plan": [
+    {"id": "step_1", "action": "<action_name>", "description": "<what this step does>", "dependencies": []},
+    {"id": "step_2", "action": "<action_name>", "description": "<what this step does>", "dependencies": ["step_1"]}
+  ],
+  "summary": "<one sentence summary of the plan>"
+}
+Output JSON only. No extra text."""
+
+    async def execute(self, task: dict[str, Any], context: list[dict[str, Any]]) -> dict[str, Any]:
+        from ..staging.llm import OllamaClient
+        import json as _json
+        import re as _re
+
+        goal = str(task.get("goal") or task.get("input") or task.get("message") or "Unnamed goal").strip()
+
+        llm = OllamaClient()
+        if llm.ready():
+            try:
+                result = await asyncio.to_thread(
+                    llm.chat,
+                    [{"role": "user", "content": f"Goal: {goal}"}],
+                    self.SYSTEM_PROMPT,
+                    True,
+                )
+                raw = result.get("message", "")
+                json_match = _re.search(r'\{.*\}', raw, _re.DOTALL)
+                if json_match:
+                    parsed = _json.loads(json_match.group())
+                    plan = parsed.get("plan", [])
+                    summary = parsed.get("summary", f"Plan ready for: {goal}")
+                    if plan:
+                        self.memory.store(goal, "episodic", ["planner", "goal"])
+                        return {
+                            "ok": True,
+                            "message": summary,
+                            "plan": plan,
+                            "context_count": len(context),
+                            "llm_powered": True,
+                        }
+            except Exception:
+                pass
+
+        # Static fallback when LLM is offline
+        steps = [
+            {"id": "understand", "action": "understand_goal",   "description": f"Clarify and normalize the goal: {goal}", "dependencies": []},
+            {"id": "retrieve",  "action": "retrieve_memory",    "description": "Search memory for relevant prior context.", "dependencies": ["understand"]},
+            {"id": "select",    "action": "select_capability",  "description": "Choose the safest available agent, workflow, or tool.", "dependencies": ["retrieve"]},
+            {"id": "verify",    "action": "verify_result",      "description": "Verify the result before reporting success.", "dependencies": ["select"]},
+        ]
+        self.memory.store(goal, "episodic", ["planner", "goal"])
+        return {
+            "ok": True,
+            "message": f"Plan ready for: {goal}",
+            "plan": steps,
+            "context_count": len(context),
+            "llm_powered": False,
+            "verification_required": True,
+        }
+
+
 # ResearchAgent and CodingAgent are not registered in AgentRuntime
 # per recovery requirements to reduce agent count to 4.
-# These can be re-enabled if research/coding functionality is needed.
+# These can be re-enabled only if their real task execution is proven.
 
 
 
@@ -381,13 +459,13 @@ class AgentRuntime:
         self.bus = bus
         self.memory = memory
         self.agents: dict[str, BaseAgent] = {
-            "PlannerAgent": AutonomousAgent("AutonomousAgent", bus, memory, task_timeout=300),
-            "AutonomousAgent": AutonomousAgent("AutonomousAgent", bus, memory, task_timeout=300),
+            "PlannerAgent": PlannerAgent("PlannerAgent", bus, memory, task_timeout=60),
             "VoiceAgent": DelegateAgent("VoiceAgent", bus, memory, voice_handler),
             "VisionAgent": DelegateAgent("VisionAgent", bus, memory, vision_handler),
             "WorkflowAgent": DelegateAgent("WorkflowAgent", bus, memory, workflow_handler),
         }
-        # Note: ResearchAgent and CodingAgent are defined but not registered to reduce agent count as per recovery requirements
+        # Note: AutonomousAgent, ResearchAgent and CodingAgent are not registered
+        # until their tool execution, permissions and side effects are proven.
         
         # Recovery settings
         self._recovery_enabled = recovery_enabled

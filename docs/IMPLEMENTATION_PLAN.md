@@ -37,15 +37,15 @@ Acceptance tests:
 
 Priority: Critical
 
-1. Restore a real `PlannerAgent` class or rename health rows/contracts honestly.
-2. Remove duplicate `AutonomousAgent` health row.
-3. Fix test imports or exports.
-4. Keep only required active agents until Central Brain exists:
+1. DONE: Restore a real `PlannerAgent` class.
+2. DONE: Remove duplicate/active `AutonomousAgent` health row.
+3. DONE: Fix test imports/exports with planner and backend-module coverage.
+4. DONE: Keep only required active agents until Central Brain exists:
    - PlannerAgent
    - VoiceAgent
    - VisionAgent
    - WorkflowAgent
-5. Disable `/agents/build` or gate it behind an explicit disabled/unavailable response during recovery.
+5. PARTIAL: `/agents/build` is gated by explicit config/policy and test-covered, but remains enableable when policy allows.
 6. Move generated sandboxes to cleanup only after tests confirm no runtime references.
 
 Acceptance tests:
@@ -53,6 +53,7 @@ Acceptance tests:
 - `/agents` returns four unique active runtime agents.
 - `ResearchAgent` and `CodingAgent` are either absent with documented disabled status or implemented and proven.
 - Agent task result schema is consistent.
+- Added regression coverage: `test_agent_contract.py` verifies PlannerAgent, the four-agent `/agents` API contract, and inactive `AutonomousAgent`/`ResearchAgent`/`CodingAgent` behavior.
 
 ## Phase 3: Fix Workflow Truthfulness
 

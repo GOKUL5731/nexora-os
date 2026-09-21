@@ -19,18 +19,23 @@ Remaining risk:
 
 ### PlannerAgent Contract Is Broken
 
-The runtime exposes a `PlannerAgent` key, but the instance is constructed as `AutonomousAgent("AutonomousAgent", ...)`. There is no exported `PlannerAgent` class.
+Resolved 2026-09-21: `PlannerAgent` is now a real exported class, runtime health exposes four unique active recovery agents, and unproven high-risk agents are not registered.
 
-Impact:
+Verified:
 
-- `/agents` returns two rows both named `AutonomousAgent`.
-- Tests fail importing `PlannerAgent`.
-- UI cannot display a truthful PlannerAgent health row.
+- `python -m pytest nexora_os/tests/test_agent_contract.py nexora_os/tests/test_smoke.py -q` passed.
+- `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_backend_modules.py` passed `24/24`.
 
-Evidence:
+Current active agents:
 
-- Full pytest failed during collection: `ImportError: cannot import name 'PlannerAgent'`.
-- Agent health returned two `AutonomousAgent` rows.
+- `PlannerAgent`
+- `VoiceAgent`
+- `VisionAgent`
+- `WorkflowAgent`
+
+Remaining risk:
+
+- `AutonomousAgent` remains in source but is inactive until its shell/file/browser tool execution has central permission and side-effect verification.
 
 ### Workflow Node Success Is Not Real Execution
 

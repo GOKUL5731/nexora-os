@@ -63,8 +63,8 @@ Audit date: 2026-07-10
 
 | Agent | Runtime key | Status | Evidence |
 | --- | --- | --- | --- |
-| PlannerAgent | `PlannerAgent` | BROKEN/PARTIAL | key maps to `AutonomousAgent`; class missing; tests fail import |
-| AutonomousAgent | `AutonomousAgent` | PARTIALLY WORKING/RISKY | can run shell/read/write/open browser based on LLM JSON without central permission policy |
+| PlannerAgent | `PlannerAgent` | WORKING/PARTIAL | real exported planner class; produces bounded plan with static fallback and is active in `/agents` |
+| AutonomousAgent | inactive source class | DISABLED/RISKY | source remains, but it is not registered until shell/file/browser tool execution has central permission and verification |
 | VoiceAgent | `VoiceAgent` | PARTIALLY WORKING | delegates status/listen/speak to VoiceEngine |
 | VisionAgent | `VisionAgent` | PARTIALLY WORKING | delegates status/start/capture/screen to VisionEngine |
 | WorkflowAgent | `WorkflowAgent` | PARTIALLY WORKING | delegates workflow run; missing workflow returns error |
@@ -110,7 +110,7 @@ Audit date: 2026-07-10
 | Brain | PLACEHOLDER/PARTIAL | Shows activity/agent steps, but no real central brain state |
 | Voice | PARTIALLY WORKING | `/voice/status`, `/voice/listen`, `/voice/speak` |
 | Vision | PARTIALLY WORKING | `/vision/status`, `/vision/frame`, `/vision/screen`; frontend now routes through central API client, but live hardware/object-detection acceptance remains separate |
-| Agents | PARTIALLY WORKING | `/agents`, `/agents/{name}/tasks`; planner mismatch |
+| Agents | PARTIALLY WORKING | `/agents`, `/agents/{name}/tasks`; four-agent recovery contract is tested, richer central-brain supervision remains incomplete |
 | Workflows | PARTIALLY WORKING | graph CRUD/run/trace |
 | Automation | PARTIALLY WORKING | `/automation`, `/automation/run` |
 | Memory | WORKING/PARTIAL | `/memory`, `/memory/network`, `/memory/reflect` |

@@ -66,6 +66,22 @@ Generated: 2026-09-21
     - core logging
     - async runtime startup/shutdown/task tracking
 
+- `python -m pytest nexora_os/tests/test_agent_contract.py nexora_os/tests/test_smoke.py -q`
+  - Result: PASS
+  - Output: `7 passed, 5 warnings`
+  - Coverage:
+    - real `PlannerAgent` class returns a bounded plan
+    - `AgentRuntime` exposes exactly four active recovery agents
+    - `AutonomousAgent`, `ResearchAgent`, and `CodingAgent` are inactive/unknown until proven
+    - `/agents` API returns four unique runtime rows
+
+- `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_backend_modules.py`
+  - Result: PASS
+  - Output: `Passed: 24/24`, `Failed: 0/24`, `Success Rate: 100.0%`
+  - Coverage:
+    - backend module imports and initialization
+    - `PlannerAgent` import through the agents runtime module
+
 - `npm run build` from repository root
   - Result: EXPECTED NON-SUCCESS
   - Output: `Missing script: "build"`
@@ -104,6 +120,7 @@ Generated: 2026-09-21
 - Workflow execution no longer reports standalone capability-node success without a registered executor; executor-backed node outputs and notification events are regression-tested.
 - Vision UI calls are routed through the central frontend API client instead of page-level localhost fetches.
 - Event-bus async delivery tuple handling is fixed, bounded queue drops are accounted, and core runtime event tests pass.
+- Agent runtime now exposes a real `PlannerAgent` and the tested four-agent recovery contract.
 - Pet G has a reproducible Blender workflow and a repository-root launcher; the previous raw `blender` command failure is handled by project tooling.
 
 ## What This Does Not Prove
