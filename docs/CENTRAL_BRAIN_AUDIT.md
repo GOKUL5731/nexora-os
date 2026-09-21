@@ -11,7 +11,7 @@ The current project is a consolidated NEXORA/Jarvis-style platform with one Reac
 The most important findings:
 
 - Identity drift: the requested Jarvis system currently exists as `nexora_os`, `NEXORA_*` launchers, and NEXORA branding.
-- Core startup/shutdown works at a basic level, but async event delivery is broken in direct subscriber verification.
+- Core startup/shutdown and event-bus delivery now pass focused recovery/core-runtime checks; broader runtime health policy remains incomplete.
 - The official UI builds and connects to many backend endpoints. Earlier VisionPage hardcoded localhost API calls have been replaced with the central API client; other UI capability backing still requires ongoing verification.
 - There is no `backend/brain/` package, no cognitive loop, no persistent goal manager, no capability registry, no model router, no tool router, no verifier, and no reflection engine.
 - Workflow execution now inspects executor return values and rejects capability nodes without a runtime executor; broader node-by-node side-effect verification is still incomplete.
@@ -50,11 +50,11 @@ The most important findings:
 | One-click launcher | PARTIALLY WORKING | Checks deps and launches app, but still uses NEXORA naming and external installers/downloads. |
 | FastAPI API layer | WORKING | Core REST endpoints respond in TestClient. |
 | WebSocket manager | PARTIALLY WORKING | Endpoint exists, but relies on event bus behavior that failed direct subscriber verification. |
-| Event bus | BROKEN | Async delivery path enqueues a 3-item tuple but delivery loop unpacks 2 values, causing swallowed delivery failure. |
+| Event bus | WORKING/PARTIAL | Async delivery tuple handling is fixed and regression-tested with bounded queue/drop accounting; health policy for degraded event metrics remains incomplete. |
 | Module manager | PARTIALLY WORKING | Registers status rows, but there is no lifecycle contract enforcement. |
 | Logger | WORKING | File logging initializes and writes logs. |
 | Async runtime | PARTIALLY WORKING | Tracks tasks created through it, but many background tasks are created directly outside it. |
-| Health monitor | PARTIALLY WORKING | Reports CPU/RAM/GPU/modules/events; can report healthy while event delivery is broken. |
+| Health monitor | PARTIALLY WORKING | Reports CPU/RAM/GPU/modules/events; still needs explicit degraded status policy for subscriber errors/dropped event spikes. |
 | Local LLM bridge | PARTIALLY WORKING | HTTP discovery works; `ollama list` timed out; no model routing categories exist. |
 | Central Brain | MISSING | No `backend/brain` package or cognitive loop. |
 | Goal manager | MISSING | No persistent goal state machine. |

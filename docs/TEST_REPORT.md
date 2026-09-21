@@ -49,6 +49,23 @@ Generated: 2026-09-21
     - the central API client owns the `VITE_NEXORA_API` / dev-origin fallback
     - VisionPage uses `nexoraApi` for camera, OCR, screen, gesture, and mouse-control actions
 
+- `python -m pytest nexora_os/tests/test_event_bus_recovery.py -q`
+  - Result: PASS
+  - Output: `3 passed`
+  - Coverage:
+    - pre-loop publication does not disable later async delivery
+    - bounded async queue overflow increments dropped-event metrics without loop errors
+    - async delivery can restart after shutdown
+
+- `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_core_runtime.py`
+  - Result: PASS
+  - Output: `Passed: 11/11`, `Failed: 0/11`, `Success Rate: 100.0%`
+  - Coverage:
+    - event bus creation, publish/subscribe, thread safety, metrics, and state management
+    - module registration
+    - core logging
+    - async runtime startup/shutdown/task tracking
+
 - `npm run build` from repository root
   - Result: EXPECTED NON-SUCCESS
   - Output: `Missing script: "build"`
@@ -86,6 +103,7 @@ Generated: 2026-09-21
 - The backend module surface can import and initialize across the major subsystems when Windows output encoding is set correctly.
 - Workflow execution no longer reports standalone capability-node success without a registered executor; executor-backed node outputs and notification events are regression-tested.
 - Vision UI calls are routed through the central frontend API client instead of page-level localhost fetches.
+- Event-bus async delivery tuple handling is fixed, bounded queue drops are accounted, and core runtime event tests pass.
 - Pet G has a reproducible Blender workflow and a repository-root launcher; the previous raw `blender` command failure is handled by project tooling.
 
 ## What This Does Not Prove

@@ -16,7 +16,7 @@ from nexora_os.backend.core.module_manager import ModuleManager
 from nexora_os.backend.core.async_runtime import AsyncRuntime
 
 
-class TestCoreRuntime:
+class CoreRuntimeSuite:
     def __init__(self):
         self.results = []
         self.root = Path(__file__).parent.parent.parent
@@ -288,7 +288,7 @@ class TestCoreRuntime:
 
 
 async def main():
-    tester = TestCoreRuntime()
+    tester = CoreRuntimeSuite()
     success = await tester.run_all_tests()
     sys.exit(0 if success else 1)
 

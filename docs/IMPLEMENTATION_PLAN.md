@@ -18,12 +18,12 @@ Status: IN PROGRESS
 
 Priority: Critical
 
-1. Fix `EventBus` async delivery tuple handling.
-2. Add a bounded queue size or backpressure policy to event delivery.
+1. DONE: Fix `EventBus` async delivery tuple handling.
+2. DONE: Add a bounded queue size and dropped-event accounting to event delivery.
 3. Make subscriber exceptions visible through logs and health.
 4. Ensure shutdown calls `EventBus.shutdown()`.
 5. Stop creating background tasks outside `AsyncRuntime` where practical.
-6. Add lifecycle smoke tests for startup, event delivery, module registration, logging, and shutdown.
+6. DONE/PARTIAL: Add lifecycle smoke tests for startup, event delivery, module registration, logging, and shutdown. Core runtime and event-bus recovery harnesses pass; full app lifecycle acceptance remains separate.
 7. Update `/health` so event bus failure cannot report globally healthy.
 
 Acceptance tests:

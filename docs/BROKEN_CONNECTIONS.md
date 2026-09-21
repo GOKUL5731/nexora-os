@@ -6,17 +6,16 @@ Audit date: 2026-07-10
 
 ### Event Bus Async Delivery Is Broken
 
-`EventBus.publish()` enqueues `(priority_value, sequence, event)`, but `_delivery_loop()` unpacks `priority, event = await self._event_queue.get()`. This causes an exception in the delivery loop and the test subscriber never receives the event.
+Resolved 2026-09-21: `_delivery_loop()` now unpacks `(priority, sequence, event)`, async delivery defaults to opt-in, queue size is bounded, overflow increments `dropped_count`, duplicate subscribers are ignored, and shutdown resets delivery state.
 
-Impact:
+Verified:
 
-- Direct async event subscribers are unreliable.
-- WebSocket/event state can become stale or dependent on polling/history rather than live delivery.
-- Event traffic metrics can be misleading.
+- `python -m pytest nexora_os/tests/test_event_bus_recovery.py -q` passed.
+- `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_core_runtime.py` passed `11/11`.
 
-Evidence:
+Remaining risk:
 
-- Runtime lifecycle test published `audit.test`; subscriber list remained empty after 0.2 seconds.
+- `/health` should still expose event-bus degradation when subscriber errors or drops rise; that is a health-monitor policy item, not the original delivery-loop crash.
 
 ### PlannerAgent Contract Is Broken
 
@@ -115,9 +114,9 @@ The prompt requires `initialize()`, `start()`, `health_check()`, `stop()`, `rest
 
 Agents, workflow scheduler, and event bus create tasks directly with `asyncio.create_task()` rather than through `AsyncRuntime`.
 
-### Health Can Report OK While Core Event Delivery Fails
+### Health Can Report OK While Core Event Delivery Is Degraded
 
-`/health` returned `ok: true` even though event delivery failed direct verification.
+The original async delivery crash is resolved, but `/health` still needs a clear degraded status policy when event-bus subscriber errors or dropped events increase.
 
 ### Automation Lacks Verification
 

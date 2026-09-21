@@ -7,8 +7,8 @@ Audit date: 2026-07-10
 | Capability | Provider | Status | Evidence |
 | --- | --- | --- | --- |
 | API status | FastAPI | WORKING | `/status` returned 200 |
-| API health | FastAPI + HealthMonitor | PARTIALLY WORKING | `/health` returned 200, but event delivery bug is not reflected as unhealthy |
-| WebSocket state/events | FastAPI `/ws/events` + EventBus | PARTIALLY WORKING | Endpoint exists; direct subscriber delivery failed |
+| API health | FastAPI + HealthMonitor | PARTIALLY WORKING | `/health` returns metrics; still needs explicit degraded policy for event-bus drops/errors |
+| WebSocket state/events | FastAPI `/ws/events` + EventBus | PARTIALLY WORKING | Endpoint exists; async EventBus delivery is regression-tested, live browser WebSocket acceptance remains separate |
 | Module registry | ModuleManager | PARTIALLY WORKING | 15 modules registered; no lifecycle contract |
 | Startup/shutdown | NexoraRuntime | WORKING | startup ok, shutdown stopped async runtime |
 | Logging | logger.py | WORKING | log files written under `nexora_os/logs` |
