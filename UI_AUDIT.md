@@ -6,7 +6,7 @@ Generated: 2026-09-21
 
 - Framework: React 18 + TypeScript + Vite.
 - Styling: project CSS files under `nexora_os/frontend/src/styles`, with the active G2 shell in `custom.css`.
-- 3D stack: Three.js, React Three Fiber, Drei, postprocessing package installed.
+- 3D stack: Three.js and React Three Fiber are used by the active scene; Drei/postprocessing packages remain installed but the shell scene avoids Drei helpers to keep the 3D chunk leaner.
 - Workflow stack: `@xyflow/react` is installed and used by `WorkflowStudio`.
 - Runtime state: `NexoraProvider` connects to `/ws/events`, stores backend status/state/events, and exposes command, voice, memory, vision, companion, connector, and workflow API actions.
 
@@ -94,6 +94,7 @@ The backend publishes real event topics including:
 - Developer mode now has a dedicated lens with event stream grouping and explicit API probes.
 - G Core previously inferred state from generic busy/voice values. It now has a `GCoreState` mapped from real WebSocket topics, but page-level labels should continue migrating to that state.
 - Heavy spatial rendering now respects an explicit low-power toggle and OS reduced-motion preference. Low-power mode removes the Canvas and shows a static state-aware core.
+- Heavy pages and spatial rendering are now dynamically imported from `App.tsx`, so the command shell can load before workflow, Pet G, developer, vision, and WebGL chunks are requested.
 - Frontend package has no `lint` or `test` scripts yet, so the requested `npm run lint` and `npm test` gates cannot run until scripts/tooling are added.
 
 ## Recommended Architecture
@@ -104,4 +105,4 @@ The backend publishes real event topics including:
 - Use `/ws/events` as the primary realtime source and HTTP endpoints for explicit user actions.
 - Keep all unavailable backend features visible as `NOT AVAILABLE` / `OFFLINE` with reason and action, never as mocked data.
 - Consolidate the active design system into named CSS/component primitives before deleting legacy files.
-- Lazy-load heavy lenses: 3D, workflows, vision, and developer mode.
+- Keep heavy lenses lazy-loaded and add manual vendor chunking only if a route-level chunk becomes a real runtime bottleneck.

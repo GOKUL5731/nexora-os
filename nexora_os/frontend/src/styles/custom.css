@@ -1338,6 +1338,42 @@
   box-shadow: 0 0 80px rgba(52, 211, 153, 0.12), inset 0 0 42px rgba(52, 211, 153, 0.08);
 }
 
+.g2-lens-loading {
+  min-height: min(42rem, 72dvh);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.7rem;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.g2-lens-loading span {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-top-color: rgba(125, 211, 252, 0.92);
+  animation: g2-spin 820ms linear infinite;
+}
+
+.g2-lens-loading strong {
+  color: #f8fafc;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.g2-lens-loading small {
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+@keyframes g2-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .g2-command-strip {
   position: relative;
   z-index: 30;

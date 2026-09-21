@@ -93,9 +93,9 @@ G
   - Computer Control lens backed by connector, automation, vision mouse, and event-stream state
   - Developer lens backed by event stream, health/state/capability/security API probes, and runtime context
   - Reduced-motion and low-power WebGL controls via shell toggle, OS `prefers-reduced-motion`, and static spatial fallback
+  - Lazy-loaded page lenses and 3D scene so the shell starts without eagerly importing workflow, Pet G, developer, vision, or WebGL bundles
   - `GCoreState` event mapping from backend topics
 - Needs follow-up:
-  - lazy loading for heavy lenses and 3D
   - lint/test script setup
 
 ## Cleanup Policy
@@ -108,7 +108,7 @@ G
 
 - Keep the center 3D scene lightweight and instanced.
 - Avoid rendering hundreds of heavyweight React agent components.
-- Lazy-load workflow, 3D companion, vision, and developer lenses.
+- Keep workflow, 3D companion, vision, developer, and other lenses behind dynamic imports.
 - Throttle high-frequency event rendering and keep event history bounded.
 - Dispose Three.js geometries/materials when dynamically replacing resources.
 - Add reduced-motion and low-power rendering modes.

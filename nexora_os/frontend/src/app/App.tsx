@@ -1,30 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { RightPanel } from "./components/RightPanel";
-import { BrainView } from "./components/BrainView";
 import { NexoraProvider, useNexora } from "../context/NexoraContext";
-import { Scene3D } from "./components/3d/Scene3D";
-
-import { DashboardPage } from "./components/pages/DashboardPage";
-import { ChatPage } from "./components/pages/ChatPage";
-import { ProjectsPage } from "./components/pages/ProjectsPage";
-import { KnowledgePage } from "./components/pages/KnowledgePage";
-import { MemoryPage } from "./components/pages/MemoryPage";
-import { AgentsPage } from "./components/pages/AgentsPage";
-import { WorkflowStudio } from "./components/workflow/WorkflowStudio";
-import { AutomationPage } from "./components/pages/AutomationPage";
-import { VisionPage } from "./components/pages/VisionPage";
-import { VoicePage } from "./components/pages/VoicePage";
-import { ConnectorsPage } from "./components/pages/ConnectorsPage";
-import { LabPage } from "./components/pages/LabPage";
-import { SettingsPage } from "./components/pages/SettingsPage";
-import { CompanionPage } from "./components/pages/CompanionPage";
-import { PetGPage } from "./components/pages/PetGPage";
-import { SecurityPage } from "./components/pages/SecurityPage";
-import { MCPPage } from "./components/pages/MCPPage";
-import { LearningPage } from "./components/pages/LearningPage";
-import { PluginsPage } from "./components/pages/PluginsPage";
-import { DeveloperPage } from "./components/pages/DeveloperPage";
-import { ComputerControlPage } from "./components/pages/ComputerControlPage";
 
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -57,6 +33,30 @@ import {
 } from "lucide-react";
 import "../styles/custom.css";
 
+const Scene3D = lazy(() => import("./components/3d/Scene3D").then((module) => ({ default: module.Scene3D })));
+const BrainView = lazy(() => import("./components/BrainView").then((module) => ({ default: module.BrainView })));
+const DashboardPage = lazy(() => import("./components/pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const ChatPage = lazy(() => import("./components/pages/ChatPage").then((module) => ({ default: module.ChatPage })));
+const ProjectsPage = lazy(() => import("./components/pages/ProjectsPage").then((module) => ({ default: module.ProjectsPage })));
+const KnowledgePage = lazy(() => import("./components/pages/KnowledgePage").then((module) => ({ default: module.KnowledgePage })));
+const MemoryPage = lazy(() => import("./components/pages/MemoryPage").then((module) => ({ default: module.MemoryPage })));
+const AgentsPage = lazy(() => import("./components/pages/AgentsPage").then((module) => ({ default: module.AgentsPage })));
+const WorkflowStudio = lazy(() => import("./components/workflow/WorkflowStudio").then((module) => ({ default: module.WorkflowStudio })));
+const AutomationPage = lazy(() => import("./components/pages/AutomationPage").then((module) => ({ default: module.AutomationPage })));
+const VisionPage = lazy(() => import("./components/pages/VisionPage").then((module) => ({ default: module.VisionPage })));
+const VoicePage = lazy(() => import("./components/pages/VoicePage").then((module) => ({ default: module.VoicePage })));
+const ConnectorsPage = lazy(() => import("./components/pages/ConnectorsPage").then((module) => ({ default: module.ConnectorsPage })));
+const LabPage = lazy(() => import("./components/pages/LabPage").then((module) => ({ default: module.LabPage })));
+const SettingsPage = lazy(() => import("./components/pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const CompanionPage = lazy(() => import("./components/pages/CompanionPage").then((module) => ({ default: module.CompanionPage })));
+const PetGPage = lazy(() => import("./components/pages/PetGPage").then((module) => ({ default: module.PetGPage })));
+const SecurityPage = lazy(() => import("./components/pages/SecurityPage").then((module) => ({ default: module.SecurityPage })));
+const MCPPage = lazy(() => import("./components/pages/MCPPage").then((module) => ({ default: module.MCPPage })));
+const LearningPage = lazy(() => import("./components/pages/LearningPage").then((module) => ({ default: module.LearningPage })));
+const PluginsPage = lazy(() => import("./components/pages/PluginsPage").then((module) => ({ default: module.PluginsPage })));
+const DeveloperPage = lazy(() => import("./components/pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
+const ComputerControlPage = lazy(() => import("./components/pages/ComputerControlPage").then((module) => ({ default: module.ComputerControlPage })));
+
 const EXPERIENCE_NAV = [
   { id: "dashboard", label: "Home", icon: Home, group: "Start" },
   { id: "chat", label: "Talk", icon: MessageSquare, group: "Create" },
@@ -80,6 +80,16 @@ const EXPERIENCE_NAV = [
   { id: "lab", label: "Lab", icon: Sparkles, group: "System" },
   { id: "settings", label: "Settings", icon: Settings, group: "System" },
 ];
+
+function LensFallback({ label }: { label: string }) {
+  return (
+    <div className="g2-lens-loading" role="status" aria-live="polite">
+      <span />
+      <strong>Opening {label}</strong>
+      <small>Loading this lens only when requested.</small>
+    </div>
+  );
+}
 
 function AppShell() {
   const { connected, status, brainState, busy, gCoreState, lowPowerMode, reducedMotion, setLowPowerMode } = useNexora();
@@ -160,7 +170,15 @@ function AppShell() {
 
   return (
     <div className="g2-os-shell">
-      <Scene3D />
+      {lowPowerMode ? (
+        <div className="g2-spatial-fallback" aria-hidden="true">
+          <div className={`g2-static-core state-${gCoreState.toLowerCase()}`} />
+        </div>
+      ) : (
+        <Suspense fallback={<div className="g2-spatial-fallback" aria-hidden="true" />}>
+          <Scene3D />
+        </Suspense>
+      )}
 
       <header className="g2-command-strip">
         <button className="g2-round-button" onClick={() => setNavOpen((value) => !value)} aria-label="Open navigation">
@@ -245,7 +263,9 @@ function AppShell() {
               transition={{ duration: 0.24, ease: "easeOut" }}
               className="g2-page-mount"
             >
-              {renderTab()}
+              <Suspense fallback={<LensFallback label={activeNav.label} />}>
+                {renderTab()}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

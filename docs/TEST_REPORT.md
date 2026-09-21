@@ -34,12 +34,13 @@ Generated: 2026-09-21
 
 - `npm run build` from `nexora_os/frontend`
   - Result: PASS
-  - Output: Vite `6.3.5`, `2783 modules transformed`
+  - Output: Vite `6.3.5`, `2789 modules transformed`
   - Assets:
     - `dist/index.html`
-    - `dist/assets/index-BvDP1Z0c.css`
-    - `dist/assets/index-DbOjeaBO.js`
-  - Warning: JS chunk remains larger than 500 kB after minification.
+    - `dist/assets/index-CjnHNFBO.css`
+    - `dist/assets/index--C4BBwpU.js` (`344.65 kB`, gzip `111.09 kB`)
+    - lazy page chunks including `WorkflowStudio-tZiSPNy4.js`, `PetGPage-DbyDJa9k.js`, `Scene3D-C-voSy76.js`, and per-lens page files
+  - Warning: one lazy Three/R3F runtime chunk remains larger than 500 kB (`extends-CEiTbmSj.js`, `874.58 kB`, gzip `235.88 kB`), but the previous eagerly loaded single-app bundle has been split.
 
 - `cmd /c create_pet_g_blender_model.cmd`
   - Result: expected non-success on this machine because Blender is unavailable.
@@ -49,7 +50,7 @@ Generated: 2026-09-21
 
 ## What This Proves
 
-- The rebuilt frontend currently compiles for production.
+- The rebuilt frontend currently compiles for production, with the shell and major lenses split into lazy chunks.
 - The capability-based tool router, core runtime, brain block-2 behavior, and smoke API coverage pass together.
 - AI Lab creation behavior is now test-covered through explicit policy instead of a vague disabled path.
 - The backend module surface can import and initialize across the major subsystems when Windows output encoding is set correctly.
@@ -67,5 +68,5 @@ Generated: 2026-09-21
 
 - FastAPI `on_event` deprecation warnings remain.
 - `pynvml` deprecation warning remains from the installed Torch/NVIDIA stack.
-- Vite bundle-size warning remains.
+- Vite bundle-size warning remains for the lazy Three/R3F runtime chunk, not the main shell bundle.
 - `PYTHONIOENCODING=utf-8` is required for the custom backend harness on this Windows console when printing Unicode status symbols.
