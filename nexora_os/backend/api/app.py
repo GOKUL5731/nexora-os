@@ -135,6 +135,28 @@ class LearningJobRequest(BaseModel):
     expected_terms: list[str] = Field(default_factory=list)
 
 
+def _agent_creation_policy() -> dict[str, Any]:
+    enabled = runtime._config_bool("agent_creation_enabled", False)
+    allow_template = runtime._config_bool("agent_creation_template_fallback", True)
+    llm_status = runtime.llm.status()
+    llm_ready = bool(llm_status.get("ready"))
+    reason = ""
+    if not enabled:
+        reason = "Agent creation is disabled by config key agent_creation_enabled."
+    elif not llm_ready and not allow_template:
+        reason = "Agent creation needs a ready LLM or agent_creation_template_fallback=true."
+    return {
+        "enabled": enabled,
+        "allow_template_fallback": allow_template,
+        "llm_ready": llm_ready,
+        "reason": reason,
+        "config_keys": {
+            "enable": "agent_creation_enabled",
+            "template_fallback": "agent_creation_template_fallback",
+        },
+    }
+
+
 class PerceptionRequest(BaseModel):
     type: str = "text"
     content: str = ""
@@ -433,11 +455,13 @@ async def agent_task(name: str, request: AgentTaskRequest) -> dict[str, Any]:
 @app.post("/agents/build")
 async def build_agent(request: AgentBuildRequest) -> dict[str, Any]:
     """Generate, validate and register a new agent using the AI Lab."""
-    if not runtime._config_bool("agent_creation_enabled", False):
-        raise HTTPException(status_code=503, detail="Agent creation is disabled in recovery mode.")
+    policy = _agent_creation_policy()
+    if not policy["enabled"] or policy["reason"]:
+        raise HTTPException(status_code=503, detail=policy)
     result = await asyncio.to_thread(runtime.creator.create, request.description, request.name)
     if not result.get("ok"):
         raise HTTPException(status_code=422, detail=result)
+    result["policy"] = policy
     return result
 
 
@@ -449,7 +473,9 @@ async def generated_agents() -> dict[str, Any]:
 @app.get("/ai_lab/status")
 async def ai_lab_status() -> dict[str, Any]:
     """Return AI Lab state: registered agents, LLM availability."""
-    return runtime.creator.status()
+    status_data = runtime.creator.status()
+    status_data["creation_policy"] = _agent_creation_policy()
+    return status_data
 
 
 @app.post("/ai_lab/validate")
@@ -686,7 +712,7 @@ async def settings() -> dict[str, Any]:
         "memory": {"database": str(runtime.memory.database), "chunks": runtime.memory.count()},
         "security": {
             "generated_code_execution": False,
-            "agent_creation_enabled": False,
+            "agent_creation": _agent_creation_policy(),
             "agent_sandbox": str(runtime.creator.sandbox),
         },
         "llm": runtime.llm.status(),
