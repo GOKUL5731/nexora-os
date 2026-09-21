@@ -23,6 +23,8 @@ import { SecurityPage } from "./components/pages/SecurityPage";
 import { MCPPage } from "./components/pages/MCPPage";
 import { LearningPage } from "./components/pages/LearningPage";
 import { PluginsPage } from "./components/pages/PluginsPage";
+import { DeveloperPage } from "./components/pages/DeveloperPage";
+import { ComputerControlPage } from "./components/pages/ComputerControlPage";
 
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -33,6 +35,7 @@ import {
   Boxes,
   Command,
   Database,
+  Fingerprint,
   FolderGit2,
   Home,
   Menu,
@@ -64,6 +67,7 @@ const EXPERIENCE_NAV = [
   { id: "agents", label: "Agents", icon: Network, group: "Build" },
   { id: "workflows", label: "Flows", icon: Workflow, group: "Build" },
   { id: "automation", label: "Actions", icon: Zap, group: "Build" },
+  { id: "computer", label: "Control", icon: Fingerprint, group: "Build" },
   { id: "vision", label: "Vision", icon: Video, group: "Senses" },
   { id: "voice", label: "Voice", icon: Mic, group: "Senses" },
   { id: "connectors", label: "Links", icon: Boxes, group: "Senses" },
@@ -71,6 +75,7 @@ const EXPERIENCE_NAV = [
   { id: "mcp", label: "MCP", icon: PlugZap, group: "System" },
   { id: "plugins", label: "Plugins", icon: Boxes, group: "System" },
   { id: "security", label: "Security", icon: Shield, group: "System" },
+  { id: "developer", label: "Dev", icon: Command, group: "System" },
   { id: "lab", label: "Lab", icon: Sparkles, group: "System" },
   { id: "settings", label: "Settings", icon: Settings, group: "System" },
 ];
@@ -121,6 +126,8 @@ function AppShell() {
         return <WorkflowStudio />;
       case "automation":
         return <AutomationPage />;
+      case "computer":
+        return <ComputerControlPage />;
       case "vision":
         return <VisionPage />;
       case "voice":
@@ -135,6 +142,8 @@ function AppShell() {
         return <PluginsPage />;
       case "security":
         return <SecurityPage />;
+      case "developer":
+        return <DeveloperPage />;
       case "lab":
         return <LabPage />;
       case "settings":

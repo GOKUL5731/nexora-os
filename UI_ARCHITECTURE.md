@@ -90,10 +90,10 @@ G
   - MCP lens backed by `/mcp/status` and `/mcp/tools`
   - Plugin lens backed by `/plugins` with truthful "registry unavailable" state
   - Security lens backed by `/security/status`, `/security/audit`, and emergency-stop controls
+  - Computer Control lens backed by connector, automation, vision mouse, and event-stream state
+  - Developer lens backed by event stream, health/state/capability/security API probes, and runtime context
   - `GCoreState` event mapping from backend topics
 - Needs follow-up:
-  - developer event/log lens
-  - computer-control timeline
   - reduced-motion control for WebGL/heavy effects
   - lazy loading for heavy lenses and 3D
   - lint/test script setup

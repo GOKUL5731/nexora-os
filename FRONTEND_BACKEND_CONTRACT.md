@@ -94,6 +94,8 @@ UI consumer: `NexoraProvider`.
 | Automation action | `POST` | `/automation/run` | `{ input, context }` | execution result |
 | Connectors | `GET` | `/connectors` | none | connector health/capabilities |
 | Connector action | `POST` | `/connectors/{name}/execute` | `{ input, context }` | connector result |
+| Computer control | `GET` | `/vision/mouse/state`, `/connectors`, `/automation`, `/events` | none / `limit` | mouse-control status, connector capability state, automation history, control timeline |
+| Developer mode | `GET` | `/events`, `/health`, `/state`, `/capabilities`, `/security/status` | none / `limit` | live event stream, runtime snapshots, capability inventory, security state |
 | Security | `GET` | `/security/status` | none | emergency stop and health |
 | Security audit | `GET` | `/security/audit` | `limit` | recent audited API requests |
 | Security | `POST` | `/security/emergency-stop`, `/security/emergency-stop/clear` | reason / none | security state |

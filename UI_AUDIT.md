@@ -32,6 +32,8 @@ Generated: 2026-09-21
 - MCP center: `MCPPage.tsx`
 - Plugin center: `PluginsPage.tsx`
 - Security: `SecurityPage.tsx`
+- Computer Control: `ComputerControlPage.tsx`
+- Developer Mode: `DeveloperPage.tsx`
 
 ## Useful Components To Preserve
 
@@ -88,7 +90,8 @@ The backend publishes real event topics including:
 - MCP center now has a dedicated read-only frontend lens; connect/disconnect/test actions still need a safe backend mutation contract.
 - Plugin center now has a dedicated truthful lens; a real plugin registry is still not exposed by the backend.
 - Security UI now has a dedicated lens for health, emergency stop, and audit entries; richer permission prompts still need product flow integration.
-- Computer-control visualization is partially represented through connectors/automation and vision mouse endpoints; it needs a chronological action timeline.
+- Computer-control visualization now has a dedicated lens with connectors, automation actions, vision mouse state, and control-related event timeline.
+- Developer mode now has a dedicated lens with event stream grouping and explicit API probes.
 - G Core previously inferred state from generic busy/voice values. It now has a `GCoreState` mapped from real WebSocket topics, but page-level labels should continue migrating to that state.
 - Frontend package has no `lint` or `test` scripts yet, so the requested `npm run lint` and `npm test` gates cannot run until scripts/tooling are added.
 
