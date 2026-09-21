@@ -1,0 +1,71 @@
+# G / Nexora Recovery Test Report
+
+Generated: 2026-09-21
+
+## Commands Run This Pass
+
+- `python -m pytest nexora_os/tests/test_tool_router.py nexora_os/tests/test_core_runtime.py nexora_os/tests/test_brain_block2.py nexora_os/tests/test_smoke.py -q`
+  - Result: PASS
+  - Output: `20 passed, 5 warnings`
+  - Coverage:
+    - capability-backed tool routing
+    - core runtime regressions
+    - brain block-2 regressions
+    - API smoke tests including AI Lab agent creation policy
+
+- `python nexora_os/tests/test_backend_modules.py`
+  - Initial result: FAIL before module assertions because Windows console encoding `cp1252` could not print checkmark/cross symbols.
+  - Failure class: `UnicodeEncodeError`, not a backend module failure.
+
+- `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_backend_modules.py`
+  - Result: PASS
+  - Output: `Passed: 24/24`, `Failed: 0/24`, `Success Rate: 100.0%`
+  - Coverage:
+    - VoiceEngine import/init/health
+    - VisionEngine import/init/health
+    - MemoryEngine import/init/store/search
+    - AgentRuntime import/init
+    - AutomationEngine import/init/status
+    - WorkflowEngine import/init
+    - AgentCreator import/init
+    - FastAPI app import
+    - SystemMonitor import
+    - plugins/models/databases directory checks
+
+- `npm run build` from `nexora_os/frontend`
+  - Result: PASS
+  - Output: Vite `6.3.5`, `2783 modules transformed`
+  - Assets:
+    - `dist/index.html`
+    - `dist/assets/index-BvDP1Z0c.css`
+    - `dist/assets/index-DbOjeaBO.js`
+  - Warning: JS chunk remains larger than 500 kB after minification.
+
+- `cmd /c create_pet_g_blender_model.cmd`
+  - Result: expected non-success on this machine because Blender is unavailable.
+  - Verified behavior: the project launcher calls the local Pet G runner and prints actionable guidance:
+    - install with `winget install --id BlenderFoundation.Blender -e`
+    - or pass `-BlenderPath "C:\Program Files\Blender Foundation\Blender 4.2\blender.exe"`
+
+## What This Proves
+
+- The rebuilt frontend currently compiles for production.
+- The capability-based tool router, core runtime, brain block-2 behavior, and smoke API coverage pass together.
+- AI Lab creation behavior is now test-covered through explicit policy instead of a vague disabled path.
+- The backend module surface can import and initialize across the major subsystems when Windows output encoding is set correctly.
+- Pet G has a reproducible Blender workflow and a repository-root launcher; the previous raw `blender` command failure is handled by project tooling.
+
+## What This Does Not Prove
+
+- It does not prove Blender output generation on this machine because Blender is not installed or not visible on PATH.
+- It does not prove a fresh live backend session on port `7474` after the latest commits.
+- It does not prove live Ollama/LLM readiness.
+- It does not prove microphone/speaker voice I/O or camera hardware behavior.
+- It does not prove full master-prompt completion; it is a verified rebuild slice.
+
+## Current Warnings
+
+- FastAPI `on_event` deprecation warnings remain.
+- `pynvml` deprecation warning remains from the installed Torch/NVIDIA stack.
+- Vite bundle-size warning remains.
+- `PYTHONIOENCODING=utf-8` is required for the custom backend harness on this Windows console when printing Unicode status symbols.
