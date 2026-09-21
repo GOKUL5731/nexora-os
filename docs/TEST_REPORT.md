@@ -32,6 +32,23 @@ Generated: 2026-09-21
     - SystemMonitor import
     - plugins/models/databases directory checks
 
+- `python -m pytest nexora_os/tests/test_workflow_truthfulness.py nexora_os/tests/test_smoke.py -q`
+  - Result: PASS
+  - Output: `6 passed, 5 warnings`
+  - Coverage:
+    - unsupported/capability workflow nodes fail when no executor is registered
+    - executor-backed workflow node output is preserved
+    - workflow notifications publish real event-bus events
+    - API smoke routes still respond
+
+- `$env:PYTHONIOENCODING='utf-8'; python nexora_os/tests/test_integration_workflow.py`
+  - Result: PASS
+  - Output: `Passed: 6/6`, `Failed: 0/6`, `Success Rate: 100.0%`
+  - Coverage:
+    - workflow engine initialization and health
+    - workflow graph save/list/retrieval
+    - executor-backed workflow execution without fake standalone `memory_save` success
+
 - `npm run build` from `nexora_os/frontend`
   - Result: PASS
   - Output: Vite `6.3.5`, `2789 modules transformed`
@@ -54,6 +71,7 @@ Generated: 2026-09-21
 - The capability-based tool router, core runtime, brain block-2 behavior, and smoke API coverage pass together.
 - AI Lab creation behavior is now test-covered through explicit policy instead of a vague disabled path.
 - The backend module surface can import and initialize across the major subsystems when Windows output encoding is set correctly.
+- Workflow execution no longer reports standalone capability-node success without a registered executor; executor-backed node outputs and notification events are regression-tested.
 - Pet G has a reproducible Blender workflow and a repository-root launcher; the previous raw `blender` command failure is handled by project tooling.
 
 ## What This Does Not Prove

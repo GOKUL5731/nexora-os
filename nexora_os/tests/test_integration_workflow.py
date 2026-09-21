@@ -14,7 +14,7 @@ from nexora_os.backend.core.event_bus import EventBus
 from nexora_os.backend.workflows.engine import WorkflowEngine
 
 
-class TestWorkflowIntegration:
+class WorkflowIntegrationSuite:
     def __init__(self):
         self.results = []
         self.root = Path(__file__).parent.parent.parent
@@ -90,6 +90,18 @@ class TestWorkflowIntegration:
             bus = EventBus()
             db_path = self.root / "databases" / "test_workflows.db"
             engine = WorkflowEngine(db_path, bus)
+
+            async def executor(node_type, data):
+                if node_type == "memory_save":
+                    text = str(data.get("text", "")).strip()
+                    if not text:
+                        return {"ok": False, "error": "memory_save requires text"}
+                    return {"ok": True, "stored": True, "text": text}
+                if node_type == "wait":
+                    return {"ok": True, "waited": True}
+                return {"ok": False, "error": f"Unexpected node type: {node_type}"}
+
+            engine.node_executor = executor
             
             # Create and execute a simple workflow
             graph = {
@@ -191,7 +203,7 @@ class TestWorkflowIntegration:
 
 
 async def main():
-    tester = TestWorkflowIntegration()
+    tester = WorkflowIntegrationSuite()
     success = await tester.run_all_tests()
     sys.exit(0 if success else 1)
 

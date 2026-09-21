@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -112,18 +113,33 @@ class WorkflowEngine:
             operator = condition_data.get("operator", "==")
             value = condition_data.get("value", "")
             
-            # For now, return true for demonstration
-            # In production, this would check against workflow context/state
-            return {"ok": True, "result": True}
+            actual = condition_data.get("actual", condition_data.get("input", ""))
+            if field:
+                actual = condition_data.get(field, actual)
+            if operator == "==":
+                result = str(actual) == str(value)
+            elif operator == "!=":
+                result = str(actual) != str(value)
+            elif operator == "contains":
+                result = str(value) in str(actual)
+            else:
+                return {"ok": False, "error": f"Unsupported condition operator: {operator}"}
+            return {"ok": True, "result": result}
         
         elif condition_type == "expression":
-            # Expression-based condition
-            expression = condition_data.get("expression", "")
-            # For now, return true for demonstration
-            return {"ok": True, "result": True}
+            return {"ok": False, "error": "Expression conditions are not enabled in recovery mode"}
         
         else:
             return {"ok": False, "error": f"Unknown condition type: {condition_type}"}
+
+    def health(self) -> dict[str, Any]:
+        return {"status": "online", "workflows": len(self.list())}
+
+    async def save_graph(self, name: str, graph: dict[str, Any]) -> dict[str, Any]:
+        return self.save({"name": name, "graph": graph})
+
+    def graphs(self) -> list[dict[str, Any]]:
+        return self.list()
 
     async def run(self, name: str) -> dict[str, Any]:
         spec = self.get(name)
@@ -134,16 +150,20 @@ class WorkflowEngine:
         incoming = {node_id: 0 for node_id in nodes}
         outgoing: dict[str, list[str]] = {node_id: [] for node_id in nodes}
         for edge in spec["graph"].get("edges", []):
-            if edge["source"] in nodes and edge["target"] in nodes:
-                outgoing[edge["source"]].append(edge["target"])
-                incoming[edge["target"]] += 1
+            src = edge.get("source") or edge.get("from")
+            tgt = edge.get("target") or edge.get("to")
+            if src in nodes and tgt in nodes:
+                outgoing[src].append(tgt)
+                incoming[tgt] += 1
         queue = [node_id for node_id, count in incoming.items() if count == 0]
         completed: list[str] = []
+        context: dict[str, Any] = {}
         while queue:
             node_id = queue.pop(0)
             node = nodes[node_id]
             started = time.perf_counter()
             status, error = "completed", ""
+            output: dict[str, Any] = {}
             
             # Handle condition nodes
             if node["type"] == "condition":
@@ -173,9 +193,29 @@ class WorkflowEngine:
             for attempt in range(spec["retries"] + 1):
                 try:
                     if self.node_executor:
-                        await self.node_executor(node["type"], node.get("data", {}))
+                        node_data = dict(node.get("data", {}))
+                        node_data["_context"] = context
+                        output = await self.node_executor(node["type"], node_data)
+                        if not isinstance(output, dict):
+                            output = {"ok": False, "error": f"Node executor returned unsupported result: {type(output).__name__}"}
+                        if not output.get("ok", False):
+                            raise RuntimeError(str(output.get("error") or output.get("message") or "Node execution failed"))
                     elif node["type"] == "wait":
                         await asyncio.sleep(min(float(node.get("data", {}).get("seconds", 0.1)), 5))
+                        output = {"ok": True}
+                    elif node["type"] == "notify":
+                        message = str(
+                            node.get("data", {}).get("message")
+                            or context.get("last", {}).get("message")
+                            or context.get("last", {}).get("text")
+                            or "Workflow notification"
+                        )
+                        self.bus.publish("workflow.notification", {"name": name, "run_id": run_id, "message": message}, "workflow_engine")
+                        output = {"ok": True, "message": message}
+                    elif node["type"] in {"trigger", "scheduler"}:
+                        output = {"ok": True, "message": f"{node['type']} control node acknowledged."}
+                    else:
+                        raise RuntimeError(f"No executor registered for node type: {node['type']}")
                     break
                 except Exception as exc:
                     error = str(exc)
@@ -188,18 +228,23 @@ class WorkflowEngine:
                         self._db.commit()
                         self.bus.publish("workflow.failed", {"name": name, "run_id": run_id, "error": error}, "workflow_engine")
                         self.sync()
-                        return {"ok": False, "run_id": run_id, "error": error, "completed": completed}
+                        outputs = {key: value for key, value in context.items() if key != "last"}
+                        return {"ok": False, "run_id": run_id, "error": error, "completed": completed, "outputs": outputs}
             self._trace(run_id, name, node_id, node["type"], status, started, error)
+            context[node_id] = output
+            context["last"] = output
             completed.append(node_id)
             for target in outgoing[node_id]:
                 incoming[target] -= 1
                 if incoming[target] == 0:
                     queue.append(target)
         if len(completed) != len(nodes):
-            return {"ok": False, "run_id": run_id, "error": "Workflow graph contains a cycle"}
+            outputs = {key: value for key, value in context.items() if key != "last"}
+            return {"ok": False, "run_id": run_id, "error": "Workflow graph contains a cycle", "outputs": outputs}
         self._db.execute("UPDATE workflows SET last_status='completed' WHERE name=?", (name,))
         self._db.commit()
-        result = {"ok": True, "run_id": run_id, "completed": completed}
+        outputs = {key: value for key, value in context.items() if key != "last"}
+        result = {"ok": True, "run_id": run_id, "completed": completed, "outputs": outputs}
         self.bus.publish("workflow.completed", {"name": name, **result}, "workflow_engine")
         self.sync()
         return result
@@ -214,16 +259,65 @@ class WorkflowEngine:
         return [dict(row) for row in reversed(self._db.execute(sql, params).fetchall())]
 
     def generate(self, description: str) -> dict[str, Any]:
+        """Generate a workflow graph from a natural language description.
+
+        Attempts LLM-powered generation first, falls back to keyword templates.
+        """
+        # Attempt LLM-powered generation
+        try:
+            from ..staging.llm import OllamaClient
+            llm = OllamaClient()
+            if llm.ready():
+                system = """You are a workflow designer. Given a description, produce a JSON workflow graph.
+Respond ONLY with a JSON object matching this schema exactly:
+{
+  "name": "<snake_case_name>",
+  "description": "<original description>",
+  "nodes": [
+    {"id": "<id>", "type": "<type>", "data": {}, "position": {"x": <int>, "y": 140}}
+  ],
+  "edges": [
+    {"id": "<id>", "source": "<node_id>", "target": "<node_id>"}
+  ]
+}
+Valid node types: trigger, scheduler, voice_input, llm, memory_save, browser, ocr, camera, file_save, agent_spawn, api_call, workflow_trigger, condition, loop, wait, notify.
+Spacing: x starts at 90 and increases by 190 per node. No extra text outside JSON."""
+                result = llm.chat([{"role": "user", "content": f"Description: {description}"}], system, json_format=True)
+                raw = result.get("message", "")
+                import re as _re
+                json_match = _re.search(r'\{.*\}', raw, _re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                    name = parsed.get("name") or "_".join(re.findall(r"[a-z0-9]+", description.lower())[:4]) or f"workflow_{int(time.time())}"
+                    nodes = parsed.get("nodes", [])
+                    edges = parsed.get("edges", [])
+                    # Validate node types
+                    nodes = [n for n in nodes if n.get("type") in self.NODE_TYPES]
+                    if nodes:
+                        return {
+                            "spec": {
+                                "name": name,
+                                "description": description,
+                                "graph": {"nodes": nodes, "edges": edges},
+                            },
+                            "generated": True,
+                            "llm_powered": True,
+                        }
+        except Exception:
+            pass
+
+        # Keyword-template fallback
         words = description.lower()
         types = ["trigger"]
         mapping = [
             ("schedule", "scheduler"), ("voice", "voice_input"), ("remember", "memory_save"),
             ("memory", "memory_save"), ("ocr", "ocr"), ("camera", "camera"), ("browser", "browser"),
             ("agent", "agent_spawn"), ("notify", "notify"), ("wait", "wait"), ("api", "api_call"),
+            ("llm", "llm"), ("file", "file_save"), ("condition", "condition"),
         ]
         types.extend(node_type for keyword, node_type in mapping if keyword in words)
         if len(types) == 1:
-            types.extend(["agent_spawn", "notify"])
+            types.extend(["llm", "notify"])
         nodes = [
             {"id": f"{node_type}_{index}", "type": node_type, "data": {}, "position": {"x": 90 + index * 190, "y": 140}}
             for index, node_type in enumerate(types)
@@ -233,7 +327,11 @@ class WorkflowEngine:
             for index in range(len(nodes) - 1)
         ]
         name = "_".join(re.findall(r"[a-z0-9]+", words)[:4]) or f"workflow_{int(time.time())}"
-        return {"spec": {"name": name, "description": description, "graph": {"nodes": nodes, "edges": edges}}, "generated": True}
+        return {
+            "spec": {"name": name, "description": description, "graph": {"nodes": nodes, "edges": edges}},
+            "generated": True,
+            "llm_powered": False,
+        }
 
     def _trace(self, run_id: str, name: str, node_id: str, node_type: str, status: str, started: float, error: str) -> None:
         self._db.execute(
@@ -255,6 +353,3 @@ class WorkflowEngine:
 
     def sync(self) -> None:
         self.bus.set_state("workflows", self.list(), "workflow_engine")
-
-
-import re
