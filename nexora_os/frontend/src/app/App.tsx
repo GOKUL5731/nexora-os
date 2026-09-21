@@ -37,6 +37,7 @@ import {
   Database,
   Fingerprint,
   FolderGit2,
+  Gauge,
   Home,
   Menu,
   MessageSquare,
@@ -81,7 +82,7 @@ const EXPERIENCE_NAV = [
 ];
 
 function AppShell() {
-  const { connected, status, brainState, busy, gCoreState } = useNexora();
+  const { connected, status, brainState, busy, gCoreState, lowPowerMode, reducedMotion, setLowPowerMode } = useNexora();
   const initialTab = typeof window !== "undefined" ? window.location.hash.replace("#", "") || "dashboard" : "dashboard";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -183,6 +184,14 @@ function AppShell() {
             {connected ? "Live" : "Offline"}
           </span>
           <span>{connected ? gCoreState : busy ? "THINKING" : "READY"}</span>
+          <button
+            onClick={() => setLowPowerMode(!lowPowerMode)}
+            aria-pressed={lowPowerMode}
+            aria-label={lowPowerMode ? "Disable low power visuals" : "Enable low power visuals"}
+            title={reducedMotion ? "OS reduced motion is active" : lowPowerMode ? "Low power visuals on" : "Full spatial visuals on"}
+          >
+            <Gauge className="h-4 w-4" />
+          </button>
           <button onClick={() => setRightPanelOpen((value) => !value)} aria-label="Toggle system context">
             <PanelRight className="h-4 w-4" />
           </button>

@@ -93,6 +93,7 @@ The backend publishes real event topics including:
 - Computer-control visualization now has a dedicated lens with connectors, automation actions, vision mouse state, and control-related event timeline.
 - Developer mode now has a dedicated lens with event stream grouping and explicit API probes.
 - G Core previously inferred state from generic busy/voice values. It now has a `GCoreState` mapped from real WebSocket topics, but page-level labels should continue migrating to that state.
+- Heavy spatial rendering now respects an explicit low-power toggle and OS reduced-motion preference. Low-power mode removes the Canvas and shows a static state-aware core.
 - Frontend package has no `lint` or `test` scripts yet, so the requested `npm run lint` and `npm test` gates cannot run until scripts/tooling are added.
 
 ## Recommended Architecture

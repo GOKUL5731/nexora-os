@@ -92,9 +92,9 @@ G
   - Security lens backed by `/security/status`, `/security/audit`, and emergency-stop controls
   - Computer Control lens backed by connector, automation, vision mouse, and event-stream state
   - Developer lens backed by event stream, health/state/capability/security API probes, and runtime context
+  - Reduced-motion and low-power WebGL controls via shell toggle, OS `prefers-reduced-motion`, and static spatial fallback
   - `GCoreState` event mapping from backend topics
 - Needs follow-up:
-  - reduced-motion control for WebGL/heavy effects
   - lazy loading for heavy lenses and 3D
   - lint/test script setup
 

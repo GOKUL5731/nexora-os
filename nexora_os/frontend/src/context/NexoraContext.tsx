@@ -61,6 +61,9 @@ type NexoraContextValue = {
   brainState: BrainState | null;
   cognitionState: CognitionStatus | null;
   gCoreState: GCoreState;
+  reducedMotion: boolean;
+  lowPowerMode: boolean;
+  setLowPowerMode: (enabled: boolean) => void;
   sendCommand: (text: string, context?: Record<string, unknown>) => Promise<ProcessResult | null>;
   confirmPending: (yes: boolean) => Promise<void>;
   startVoice: () => Promise<void>;
@@ -156,6 +159,27 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
   const [brainState, setBrainState] = useState<BrainState | null>(null);
   const [cognitionState, setCognitionState] = useState<CognitionStatus | null>(null);
   const [gCoreState, setGCoreState] = useState<GCoreState>("OFFLINE");
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [lowPowerMode, setLowPowerModeState] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("g.lowPowerMode") === "true";
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  const setLowPowerMode = useCallback((enabled: boolean) => {
+    setLowPowerModeState(enabled);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("g.lowPowerMode", String(enabled));
+    }
+  }, []);
 
   const refreshMemory = useCallback(async (query = "") => {
     try {
@@ -398,6 +422,9 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       brainState,
       cognitionState,
       gCoreState,
+      reducedMotion,
+      lowPowerMode,
+      setLowPowerMode,
       sendCommand,
       confirmPending,
       startVoice,
@@ -425,6 +452,9 @@ export function NexoraProvider({ children }: { children: React.ReactNode }) {
       brainState,
       cognitionState,
       gCoreState,
+      reducedMotion,
+      lowPowerMode,
+      setLowPowerMode,
       sendCommand,
       confirmPending,
       startVoice,

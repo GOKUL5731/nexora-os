@@ -111,3 +111,4 @@ UI consumer: `NexoraProvider`.
 - UI must not fabricate counts, progress, CPU/GPU values, installed plugins, MCP servers, agent status, learning status, or workflow completion.
 - Long-running visuals must be driven by event topics or active HTTP requests, not fake timers.
 - Backend errors must produce a user-visible failed/offline state.
+- Accessibility/performance preferences such as low-power WebGL mode are local UI state and must not be represented as backend capability state.
